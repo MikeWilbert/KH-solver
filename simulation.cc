@@ -4,12 +4,35 @@ simulation::simulation( const size_t N_, const size_t BD_, const double cfl_ ) :
 N(N_), 
 BD(BD_), 
 cfl(cfl_), 
-N_bd(N_+2*BD_), 
-E( {3, N_, N_} ),
-B( {3, N_, N_} )
+N_bd(N+2*BD), 
+E( {3, N_bd, N_bd} ),
+B( {3, N_bd, N_bd} )
 {
 
   init_mpi();
+
+  setup();
+
+}
+
+void simulation::setup()
+{
+
+  L = 2.;
+  dx = L / N;
+
+  for( size_t ix = BD; ix < N_bd - BD; ix++ ){
+  for( size_t iy = BD; iy < N_bd - BD; iy++ ){
+
+    E(0,ix,iy) = 1.;
+    E(1,ix,iy) = 1.;
+    E(2,ix,iy) = 1.;
+
+    B(0,ix,iy) = 1.;
+    B(1,ix,iy) = 1.;
+    B(2,ix,iy) = 1.;
+
+  }}
 
 }
 

@@ -21,9 +21,14 @@ class simulation
 
     const size_t N_bd;
 
+    double dt;
+    double dx;
+    double L;
+
     ArrayND<double> E;
     ArrayND<double> B;
 
     void init_mpi();
+    void setup();
 
 };
