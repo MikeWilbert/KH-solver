@@ -19,6 +19,7 @@ void simulation::init_mpi()
   MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
 
+  // setup 2D Cartesian processor grid
   int ndims = 2;
   mpi_dims[0] = 0; // 0 → let MPI choose
   mpi_dims[1] = 0;          
@@ -32,6 +33,26 @@ void simulation::init_mpi()
 
   MPI_Cart_coords(cart_comm, mpi_rank, ndims, mpi_coords);
 
+  // get direct neighbors
+  MPI_Cart_shift(cart_comm, 0, 1, &mpi_neighbors[0], &mpi_neighbors[1]); // L,R
+  MPI_Cart_shift(cart_comm, 1, 1, &mpi_neighbors[2], &mpi_neighbors[3]); // U,D
+
+  // get diagonal neighbors
+  int px = mpi_dims[0];
+  int py = mpi_dims[1];
+
+  int diags[4][2] = {
+      {(mpi_coords[0]-1+px)%px, (mpi_coords[1]-1+py)%py}, // TL
+      {(mpi_coords[0]+1)%px,    (mpi_coords[1]-1+py)%py}, // TR
+      {(mpi_coords[0]-1+px)%px, (mpi_coords[1]+1)%py},    // BL
+      {(mpi_coords[0]+1)%px,    (mpi_coords[1]+1)%py}     // BR
+  };
+
+  for(int i=0; i<4; ++i) {
+      MPI_Cart_rank(cart_comm, diags[i], &mpi_neighbors[4+i]);
+  }
+
+  // print info
   if(mpi_rank==0)
   { 
     std::cout << "MPI initialization complete!" << std::endl;
