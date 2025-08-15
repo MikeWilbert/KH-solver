@@ -1,43 +1,72 @@
+#pragma once
 #include <vector>
-#include <cassert>
 #include <initializer_list>
+#include <stdexcept>
+#include <limits>
+#include <cstddef>  // for size_t
 
 template<typename T>
 class ArrayND {
 private:
-    std::vector<T> data_;
-    std::vector<size_t> dims_;
-    std::vector<size_t> strides_;
+    std::vector<size_t> dims_;    // sizes of each dimension
+    std::vector<size_t> strides_; // precomputed strides
+    std::vector<T> data_;         // contiguous storage
 
 public:
-    // Constructor from a list of dimensions
-    ArrayND(std::initializer_list<size_t> dims) : dims_(dims) {
-        size_t N = dims_.size();
-        strides_.resize(N);
+    // Constructor using initializer_list
+    ArrayND(std::initializer_list<size_t> dims) 
+        : dims_(dims) 
+    {
+        if (dims_.empty())
+            throw std::invalid_argument("ArrayND must have at least one dimension");
+
+        // Compute strides safely
+        strides_.resize(dims_.size());
         size_t stride = 1;
-        for (size_t i = N; i-- > 0;) {
+        for (size_t i = dims_.size(); i-- > 0;) {
+            if (dims_[i] != 0 && stride > std::numeric_limits<size_t>::max() / dims_[i])
+                throw std::overflow_error("ArrayND size too large");
             strides_[i] = stride;
             stride *= dims_[i];
         }
-        data_.resize(stride);
+
+        data_.resize(stride); // fills with default-constructed T (0.0 for double)
     }
 
-    // Access element (2D/3D)
+    // Access operator for 2D/3D/... using variadic template
     template<typename... Args>
     T& operator()(Args... args) {
-        static_assert(sizeof...(Args) == 2 || sizeof...(Args) == 3, 
-                      "Only 2D or 3D arrays supported for now");
-        std::array<size_t, sizeof...(Args)> idx{static_cast<size_t>(args)...};
-        size_t offset = 0;
-        for (size_t i = 0; i < idx.size(); ++i) {
-            assert(idx[i] < dims_[i]);
-            offset += idx[i] * strides_[i];
-        }
-        return data_[offset];
+        return data_[compute_index(args...)];
     }
 
+    template<typename... Args>
+    const T& operator()(Args... args) const {
+        return data_[compute_index(args...)];
+    }
+
+    // Return raw pointer for MPI
     T* data() { return data_.data(); }
     const T* data() const { return data_.data(); }
 
-    size_t size() const { return data_.size(); }
+    // Number of dimensions
+    size_t ndim() const { return dims_.size(); }
+
+    // Get size of a dimension
+    size_t size(size_t i) const { return dims_.at(i); }
+
+private:
+    // Helper to compute flat index
+    template<typename... Args>
+    size_t compute_index(Args... args) const {
+        if (sizeof...(Args) != dims_.size())
+            throw std::out_of_range("Wrong number of indices in ArrayND");
+        size_t idx = 0;
+        size_t indices[] = {static_cast<size_t>(args)...};
+        for (size_t i = 0; i < dims_.size(); ++i) {
+            if (indices[i] >= dims_[i])
+                throw std::out_of_range("ArrayND index out of bounds");
+            idx += indices[i] * strides_[i];
+        }
+        return idx;
+    }
 };

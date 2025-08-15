@@ -1,7 +1,9 @@
 #include "simulation.h"
 
-simulation::simulation( const size_t N_ ) :
+simulation::simulation( const size_t N_, const size_t BD_ ) :
 N(N_), 
+BD(BD_), 
+N_bd(N_+2*BD_), 
 E( {3, N_, N_} ),
 B( {3, N_, N_} )
 {
