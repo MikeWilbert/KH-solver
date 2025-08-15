@@ -1,6 +1,6 @@
 # Compiler
 CXX = mpic++
-CXXFLAGS = -O2 -Wall -std=c++17
+CXXFLAGS = -O2 -Wall -std=c++11
 
 # Target
 TARGET = mike_phy
@@ -14,7 +14,7 @@ $(TARGET): main.o simulation.o
 main.o: main.cc include.h
 	$(CXX) $(CXXFLAGS) -c $<
 
-simulation.o: simulation.cc simulation.h include.h
+simulation.o: simulation.cc simulation.h array_ND.h include.h
 	$(CXX) $(CXXFLAGS) -c $<
 
 clean:

@@ -7,15 +7,16 @@ class simulation
 
   public:
 
-    simulation( const int N_  );
+    simulation( const size_t N_  );
     ~simulation();
 
   private:
 
     int mpi_rank, mpi_size;
 
-    const int N;
-    std::vector<double> E;
-    std::vector<double> B;
+    const size_t N;
+
+    ArrayND<double> E;
+    ArrayND<double> B;
 
 };
