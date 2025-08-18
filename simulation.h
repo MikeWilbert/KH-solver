@@ -25,6 +25,7 @@ class simulation
     double dt;
     double dx;
     double L;
+    double time;
 
     ArrayND<double> E;
     ArrayND<double> B;
@@ -32,5 +33,6 @@ class simulation
     void init_mpi();
     void setup();
     void print_vti();
+    void write_vti_header();
 
 };

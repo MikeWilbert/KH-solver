@@ -22,6 +22,8 @@ cfl(cfl_)
 
   setup();
 
+  print_vti();
+
 }
 
 void simulation::setup()
@@ -29,6 +31,7 @@ void simulation::setup()
 
   L = 2.;
   dx = L / N_tot;
+  time = 0.;
 
   for( size_t ix = BD; ix < N_bd[0] - BD; ix++ ){
   for( size_t iy = BD; iy < N_bd[1] - BD; iy++ ){
@@ -51,72 +54,74 @@ void simulation::setup()
 void simulation::print_vti()
 {
 
-  const std::string file_name = "/home/fs1/mw/Reconnection/mikePhy/output.xmf";
+  write_vti_header();
 
-  // std::ofstream f(path.c_str());
-  // if (!f) throw std::runtime_error("Failed to open XMF file for writing.");
+}
 
-  // std::ofstream os;
+void simulation::write_vti_header()
+{
+
+  const std::string file_name = "/home/fs1/mw/Reconnection/mikePhy/output.vti";
+
+  std::ofstream os;
   
-  // long N_l = N;
-  // long offset = 0;
-	// long N_tot = N_l*N_l;
-	// long N_bytes_scalar  =   N_tot * sizeof(float);
-	// long N_bytes_vector  = 2*N_tot * sizeof(float);
-  // long bin_size_scalar = N_bytes_scalar + sizeof(uint64_t);// 2nd term is the size of the the leading integer announcing the numbers n the data chunk
-  // long bin_size_vector = N_bytes_vector + sizeof(uint64_t);
+  long N_l = N_tot;
+  long offset = 0;
+	long N_tot = N_l*N_l;
+	long N_bytes_scalar  =   N_tot * sizeof(float);
+	long N_bytes_vector  = 2*N_tot * sizeof(float);
+  long bin_size_scalar = N_bytes_scalar + sizeof(uint64_t);// 2nd term is the size of the the leading integer announcing the numbers n the data chunk
+  long bin_size_vector = N_bytes_vector + sizeof(uint64_t);
 
-  // // header
-  // if(mpi_rank==0)
-  // {
-  //   os.open(file_name.c_str(), std::ios::out);
-  //   if(!os){
-  //     std::cout << "Cannot write vti header to file '" << file_name << "'!\n";
-  //   }
+  // header
+  if(mpi_rank==0)
+  {
+    os.open(file_name.c_str(), std::ios::out);
+    if(!os){
+      std::cout << "Cannot write vti header to file '" << file_name << "'!\n";
+    }
     
     // write header	
-		// int extend_l[3]  = {0, 0, 0};
-		// int extend_r[3]  = {N-1, N-1, N-1};
-		// double origin[3] = {XB,XB,ZB};
+		int extend_l[2]  = {0, 0};
+		int extend_r[2]  = {N_tot, N_tot};
+		double origin[3] = {0.,0.,0.};
     
-    // os << "<VTKFile type=\"ImageData\" version=\"1.0\" byte_order=\"LittleEndian\" header_type=\"UInt64\">" << std::endl;	
-    // os << "  <ImageData WholeExtent=\"" << extend_l[0] << " " << extend_r[0] << " " 
-    //                                     << extend_l[1] << " " << extend_r[1] << " " 
-    //                                     << extend_l[2] << " " << extend_r[2] 
-		// 		 << "\" Origin=\""  << origin[0]  << " " << origin[1]  << " " << origin[2] 
-		// 		 << "\" Spacing=\"" << dx << " " << dx << " " << dz
-    //      << "\" Direction=\"0 0 1 0 1 0 1 0 0\">" << std::endl; // FORTRAN -> C order (no effect..)
+    os << "<VTKFile type=\"ImageData\" version=\"1.0\" byte_order=\"LittleEndian\" header_type=\"UInt64\">" << std::endl;	
+    os << "  <ImageData WholeExtent=\"" << extend_l[0] << " " << extend_r[0] << " " 
+                                        << extend_l[1] << " " << extend_r[1] << " " 
+                                        << "0" << " " << "0"
+				 << "\" Origin=\""  << origin[0]  << " " << origin[1]  << " " << origin[2] 
+				 << "\" Spacing=\"" << dx << " " << dx << " " << 1.
+         << "\" Direction=\"0 0 1 0 1 0 1 0 0\">" << std::endl; // FORTRAN -> C order (no effect..)
     
-    // os << "      <FieldData>" << std::endl;
-    // os << "        <DataArray type=\"Float32\" Name=\"TimeValue\" NumberOfTuples=\"1\" format=\"ascii\">" << std::endl;
-    // os << "        "<< float(time) << std::endl;
-    // os << "        </DataArray>" << std::endl;
-    // os << "      </FieldData>" << std::endl;
+    os << "      <FieldData>" << std::endl;
+    os << "        <DataArray type=\"Float32\" Name=\"TimeValue\" NumberOfTuples=\"1\" format=\"ascii\">" << std::endl;
+    os << "        "<< float(time) << std::endl;
+    os << "        </DataArray>" << std::endl;
+    os << "      </FieldData>" << std::endl;
         
-		// os << "    <Piece Extent=\"" << extend_l[0] << " " << extend_r[0] << " " 
-    //                              << extend_l[1] << " " << extend_r[1] << " " 
-    //                              << extend_l[2] << " " << extend_r[2] << "\">" << std::endl;
+		os << "    <Piece Extent=\"" << extend_l[0] << " " << extend_r[0] << " " 
+                                 << extend_l[1] << " " << extend_r[1] << " " 
+                                 << "0" << " " << "0" << "\">" << std::endl;
     
-    // os << "      <PointData Scalars=\"P\" Vectors=\"V\">" << std::endl;
-    
-    // os << "        <DataArray type=\"Float32\" Name=\"V\" NumberOfComponents=\"3\" format=\"appended\" offset=\"" << offset << "\">" << std::endl;
-    // os << "        </DataArray>" << std::endl;
-    // offset += bin_size_vector;
-    // os << "        <DataArray type=\"Float32\" Name=\"B\" NumberOfComponents=\"3\" format=\"appended\" offset=\"" << offset << "\">" << std::endl;
-    // os << "        </DataArray>" << std::endl;
-    // offset += bin_size_vector;
-    
-    // os << "      </PointData>" << std::endl;
-    // os << "      <CellData>" << std::endl;
-    // os << "      </CellData>" << std::endl;
-    // os << "    </Piece>" << std::endl;
-    // os << "  </ImageData>" << std::endl;
-    // os << "  <AppendedData encoding=\"raw\">" << std::endl;
-    // os << "   _";
+    os << "      <PointData>" << std::endl;
+    os << "      </PointData>" << std::endl;
+    os << "      <CellData>" << std::endl;
+    os << "        <DataArray type=\"Float32\" Name=\"E\" NumberOfComponents=\"3\" format=\"appended\" offset=\"" << offset << "\">" << std::endl;
+    os << "        </DataArray>" << std::endl;
+    offset += bin_size_vector;
+    os << "        <DataArray type=\"Float32\" Name=\"B\" NumberOfComponents=\"3\" format=\"appended\" offset=\"" << offset << "\">" << std::endl;
+    os << "        </DataArray>" << std::endl;
+    offset += bin_size_vector;
+    os << "      </CellData>" << std::endl;
+    os << "    </Piece>" << std::endl;
+    os << "  </ImageData>" << std::endl;
+    os << "  <AppendedData encoding=\"raw\">" << std::endl;
+    os << "   _";
                                 
-    // os.close();
+    os.close();
   
-  // }MPI_Barrier(MPI_COMM_WORLD);
+  }MPI_Barrier(MPI_COMM_WORLD);
 
 }
 
