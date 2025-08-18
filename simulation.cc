@@ -17,6 +17,22 @@ cfl(cfl_)
   N_bd[0] = N[0] + 2*BD;
   N_bd[1] = N[1] + 2*BD;
 
+  // create derived MPI_datatypes for vti output
+  int size_total[3] = { N_tot,N_tot,1 };
+  int mpi_start[3]  = { mpi_coords[0]*N[0],mpi_coords[1]*N[1],0 };
+  int mpi_size[3]   = {               N[0],              N[1],1 };
+
+  MPI_Type_contiguous(3, MPI_FLOAT, &vti_float3);
+  MPI_Type_commit(&vti_float3);
+
+  MPI_Type_create_subarray(3, size_total, mpi_size, mpi_start, MPI_ORDER_C, MPI_FLOAT, &vti_subarray);
+  MPI_Type_commit(&vti_subarray);
+  
+  MPI_Type_create_subarray(3, size_total,mpi_size, mpi_start, MPI_ORDER_C, vti_float3, &vti_subarray_vector);
+  MPI_Type_commit(&vti_subarray_vector);
+
+  float_array_vector.resize( {3,N[0],N[1]} );
+
   E.resize({3, N_bd[0], N_bd[1]});
   B.resize({3, N_bd[0], N_bd[1]});
 
@@ -54,14 +70,52 @@ void simulation::setup()
 void simulation::print_vti()
 {
 
-  write_vti_header();
+  const std::string file_name = "/home/fs1/mw/Reconnection/mikePhy/output.vti";
+
+  write_vti_header( file_name );
+
+
+
+  write_vti_footer( file_name );
 
 }
 
-void simulation::write_vti_header()
+void simulation::print_mpi_vector(long& N_bytes_vector, const char* file_name)
 {
+  if(mpi_rank==0)
+  {
+    std::ofstream binary_os(file_name, std::ios::out | std::ios::app | std::ios::binary );
+    binary_os.write(reinterpret_cast<const char*>(&N_bytes_vector),sizeof(uint64_t)); // size of following binary package
+    binary_os.close();
+  }MPI_Barrier(MPI_COMM_WORLD);
+  
+  // open file
+  MPI_File mpi_file;
+  MPI_File_open(MPI_COMM_WORLD, file_name, MPI_MODE_APPEND|MPI_MODE_WRONLY, MPI_INFO_NULL, &mpi_file);
+  
+  // offset to end of file
+  MPI_Offset mpi_eof;
+  MPI_File_get_position(mpi_file, &mpi_eof);
+  MPI_Barrier(MPI_COMM_WORLD);
+  
+  // data to float array
+  // for(int id = 0; id < size_R_tot; id++)
+  // {
+    // float_array_vector[3*id+0] = float(field_X[id].real());
+    // float_array_vector[3*id+1] = float(field_Y[id].real());
+    // float_array_vector[3*id+2] = float(field_Z[id].real());
+  // }
+  
+  // write data
+  MPI_File_set_view(mpi_file, mpi_eof, vti_float3, vti_subarray_vector, "native", MPI_INFO_NULL);
+  // MPI_File_write_all(mpi_file, float_array_vector, size_R_tot, vti_float3, MPI_STATUS_IGNORE);
+  
+  // close file
+  MPI_File_close(&mpi_file);  
+}
 
-  const std::string file_name = "/home/fs1/mw/Reconnection/mikePhy/output.vti";
+void simulation::write_vti_header( std::string file_name )
+{
 
   std::ofstream os;
   
@@ -121,6 +175,28 @@ void simulation::write_vti_header()
                                 
     os.close();
   
+  }MPI_Barrier(MPI_COMM_WORLD);
+
+}
+
+void simulation::write_vti_footer( std::string file_name )
+{
+
+  std::ofstream os;
+
+  // footer
+  if(mpi_rank==0)
+  {
+    os.open(file_name.c_str(), std::ios::out | std::ios::app);
+    if(!os){
+      std::cout << "Cannot write footer to file '" << file_name << "'!\n";
+      exit(3);
+    }
+		
+		os << std::endl << "  </AppendedData>" << std::endl;
+    os<< "</VTKFile>" << std::endl;
+	
+    os.close();
   }MPI_Barrier(MPI_COMM_WORLD);
 
 }
