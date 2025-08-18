@@ -1,4 +1,6 @@
 log/
+.vscode/
 mike_phy
+
 
 *.o

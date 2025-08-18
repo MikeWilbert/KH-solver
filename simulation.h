@@ -15,11 +15,12 @@ class simulation
     int mpi_rank, mpi_size, mpi_dims[2], mpi_coords[2];
     int mpi_neighbors[8]; // W,E,S,N, NW, NE, SW, SE
 
-    const size_t N;
+    const size_t N_tot;
     const size_t BD;
     const size_t cfl;
 
-    const size_t N_bd;
+    size_t N[2]; // local internal size (1D)
+    size_t N_bd[2];
 
     double dt;
     double dx;
@@ -30,5 +31,6 @@ class simulation
 
     void init_mpi();
     void setup();
+    void print_vti();
 
 };

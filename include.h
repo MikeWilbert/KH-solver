@@ -1,6 +1,9 @@
 #pragma once
 
-#include <mpi.h>
-#include <iostream>
-#include <vector>
 #include "array_ND.h"
+#include <iostream>
+#include <fstream>
+#include <memory>
+#include <vector>
+#include <cmath>
+#include <mpi.h>

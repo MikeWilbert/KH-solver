@@ -1,15 +1,24 @@
 #include "simulation.h"
 
+// Parallelen vti output und anschließend ghost cell exchange. Dann steht das framework
+
+
 simulation::simulation( const size_t N_, const size_t BD_, const double cfl_ ) :
-N(N_), 
+N_tot(N_), 
 BD(BD_), 
-cfl(cfl_), 
-N_bd(N+2*BD), 
-E( {3, N_bd, N_bd} ),
-B( {3, N_bd, N_bd} )
+cfl(cfl_) 
 {
 
   init_mpi();
+
+  N[0] = N_tot / mpi_dims[0];
+  N[1] = N_tot / mpi_dims[1];
+
+  N_bd[0] = N[0] + 2*BD;
+  N_bd[1] = N[1] + 2*BD;
+
+  E.resize({3, N_bd[0], N_bd[1]});
+  B.resize({3, N_bd[0], N_bd[1]});
 
   setup();
 
@@ -19,20 +28,95 @@ void simulation::setup()
 {
 
   L = 2.;
-  dx = L / N;
+  dx = L / N_tot;
 
-  for( size_t ix = BD; ix < N_bd - BD; ix++ ){
-  for( size_t iy = BD; iy < N_bd - BD; iy++ ){
+  for( size_t ix = BD; ix < N_bd[0] - BD; ix++ ){
+  for( size_t iy = BD; iy < N_bd[1] - BD; iy++ ){
 
-    E(0,ix,iy) = 1.;
-    E(1,ix,iy) = 1.;
+    double x_val = ( ix - BD + 0.5 ) * dx;
+    double y_val = ( iy - BD + 0.5 ) * dx;
+
+    E(0,ix,iy) = sin( L/(2.*M_PI) * x_val );
+    E(1,ix,iy) = cos( L/(2.*M_PI) * x_val );
     E(2,ix,iy) = 1.;
 
-    B(0,ix,iy) = 1.;
-    B(1,ix,iy) = 1.;
+    B(0,ix,iy) = sin( L/(2.*M_PI) * y_val );
+    B(1,ix,iy) = cos( L/(2.*M_PI) * y_val );
     B(2,ix,iy) = 1.;
 
   }}
+
+}
+
+void simulation::print_vti()
+{
+
+  const std::string file_name = "/home/fs1/mw/Reconnection/mikePhy/output.xmf";
+
+  // std::ofstream f(path.c_str());
+  // if (!f) throw std::runtime_error("Failed to open XMF file for writing.");
+
+  // std::ofstream os;
+  
+  // long N_l = N;
+  // long offset = 0;
+	// long N_tot = N_l*N_l;
+	// long N_bytes_scalar  =   N_tot * sizeof(float);
+	// long N_bytes_vector  = 2*N_tot * sizeof(float);
+  // long bin_size_scalar = N_bytes_scalar + sizeof(uint64_t);// 2nd term is the size of the the leading integer announcing the numbers n the data chunk
+  // long bin_size_vector = N_bytes_vector + sizeof(uint64_t);
+
+  // // header
+  // if(mpi_rank==0)
+  // {
+  //   os.open(file_name.c_str(), std::ios::out);
+  //   if(!os){
+  //     std::cout << "Cannot write vti header to file '" << file_name << "'!\n";
+  //   }
+    
+    // write header	
+		// int extend_l[3]  = {0, 0, 0};
+		// int extend_r[3]  = {N-1, N-1, N-1};
+		// double origin[3] = {XB,XB,ZB};
+    
+    // os << "<VTKFile type=\"ImageData\" version=\"1.0\" byte_order=\"LittleEndian\" header_type=\"UInt64\">" << std::endl;	
+    // os << "  <ImageData WholeExtent=\"" << extend_l[0] << " " << extend_r[0] << " " 
+    //                                     << extend_l[1] << " " << extend_r[1] << " " 
+    //                                     << extend_l[2] << " " << extend_r[2] 
+		// 		 << "\" Origin=\""  << origin[0]  << " " << origin[1]  << " " << origin[2] 
+		// 		 << "\" Spacing=\"" << dx << " " << dx << " " << dz
+    //      << "\" Direction=\"0 0 1 0 1 0 1 0 0\">" << std::endl; // FORTRAN -> C order (no effect..)
+    
+    // os << "      <FieldData>" << std::endl;
+    // os << "        <DataArray type=\"Float32\" Name=\"TimeValue\" NumberOfTuples=\"1\" format=\"ascii\">" << std::endl;
+    // os << "        "<< float(time) << std::endl;
+    // os << "        </DataArray>" << std::endl;
+    // os << "      </FieldData>" << std::endl;
+        
+		// os << "    <Piece Extent=\"" << extend_l[0] << " " << extend_r[0] << " " 
+    //                              << extend_l[1] << " " << extend_r[1] << " " 
+    //                              << extend_l[2] << " " << extend_r[2] << "\">" << std::endl;
+    
+    // os << "      <PointData Scalars=\"P\" Vectors=\"V\">" << std::endl;
+    
+    // os << "        <DataArray type=\"Float32\" Name=\"V\" NumberOfComponents=\"3\" format=\"appended\" offset=\"" << offset << "\">" << std::endl;
+    // os << "        </DataArray>" << std::endl;
+    // offset += bin_size_vector;
+    // os << "        <DataArray type=\"Float32\" Name=\"B\" NumberOfComponents=\"3\" format=\"appended\" offset=\"" << offset << "\">" << std::endl;
+    // os << "        </DataArray>" << std::endl;
+    // offset += bin_size_vector;
+    
+    // os << "      </PointData>" << std::endl;
+    // os << "      <CellData>" << std::endl;
+    // os << "      </CellData>" << std::endl;
+    // os << "    </Piece>" << std::endl;
+    // os << "  </ImageData>" << std::endl;
+    // os << "  <AppendedData encoding=\"raw\">" << std::endl;
+    // os << "   _";
+                                
+    // os.close();
+  
+  // }MPI_Barrier(MPI_COMM_WORLD);
 
 }
 
