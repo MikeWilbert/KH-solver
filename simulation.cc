@@ -31,7 +31,7 @@ cfl(cfl_)
   MPI_Type_create_subarray(3, size_total,mpi_size, mpi_start, MPI_ORDER_C, vti_float3, &vti_subarray_vector);
   MPI_Type_commit(&vti_subarray_vector);
 
-  float_array_vector.resize( {3,N[0],N[1]} );
+  float_array_vector = new float[ 3*N[0]*N[1] ];
 
   E.resize({3, N_bd[0], N_bd[1]});
   B.resize({3, N_bd[0], N_bd[1]});
@@ -72,58 +72,63 @@ void simulation::print_vti()
 
   const std::string file_name = "/home/fs1/mw/Reconnection/mikePhy/output.vti";
 
-  write_vti_header( file_name );
+  long N_bytes_scalar, N_bytes_vector;
 
+  write_vti_header( file_name, N_bytes_scalar, N_bytes_vector );
 
+  print_mpi_vector( file_name, N_bytes_vector, E );
+  // print_mpi_vector( file_name, N_bytes_vector, B );
 
   write_vti_footer( file_name );
 
 }
 
-void simulation::print_mpi_vector(long& N_bytes_vector, const char* file_name)
+void simulation::print_mpi_vector( std::string file_name, long& N_bytes_vector, const ArrayND<double>& field )
 {
   if(mpi_rank==0)
   {
-    std::ofstream binary_os(file_name, std::ios::out | std::ios::app | std::ios::binary );
+    std::ofstream binary_os(file_name.c_str(), std::ios::out | std::ios::app | std::ios::binary );
     binary_os.write(reinterpret_cast<const char*>(&N_bytes_vector),sizeof(uint64_t)); // size of following binary package
     binary_os.close();
   }MPI_Barrier(MPI_COMM_WORLD);
   
   // open file
   MPI_File mpi_file;
-  MPI_File_open(MPI_COMM_WORLD, file_name, MPI_MODE_APPEND|MPI_MODE_WRONLY, MPI_INFO_NULL, &mpi_file);
+  MPI_File_open(MPI_COMM_WORLD, file_name.c_str(), MPI_MODE_APPEND|MPI_MODE_WRONLY, MPI_INFO_NULL, &mpi_file);
   
   // offset to end of file
   MPI_Offset mpi_eof;
   MPI_File_get_position(mpi_file, &mpi_eof);
   MPI_Barrier(MPI_COMM_WORLD);
   
-  // data to float array
-  // for(int id = 0; id < size_R_tot; id++)
-  // {
-    // float_array_vector[3*id+0] = float(field_X[id].real());
-    // float_array_vector[3*id+1] = float(field_Y[id].real());
-    // float_array_vector[3*id+2] = float(field_Z[id].real());
-  // }
+  for( size_t ix = BD; ix < N_bd[0] - BD; ix++ ){
+  for( size_t iy = BD; iy < N_bd[1] - BD; iy++ ){
+    
+    size_t id = (ix-BD) * N[1] + (iy-BD); // AUF DIE REIHENFOLGE AUFPASSEN!!
+    
+    float_array_vector[3*id+0] = float( field(0,ix,iy) );
+    float_array_vector[3*id+1] = float( field(1,ix,iy) );
+    float_array_vector[3*id+2] = float( field(2,ix,iy) ); 
+  }}
   
   // write data
   MPI_File_set_view(mpi_file, mpi_eof, vti_float3, vti_subarray_vector, "native", MPI_INFO_NULL);
-  // MPI_File_write_all(mpi_file, float_array_vector, size_R_tot, vti_float3, MPI_STATUS_IGNORE);
+  MPI_File_write_all(mpi_file, float_array_vector, N_tot*N_tot, vti_float3, MPI_STATUS_IGNORE);
   
   // close file
   MPI_File_close(&mpi_file);  
 }
 
-void simulation::write_vti_header( std::string file_name )
+void simulation::write_vti_header( std::string file_name, long& N_bytes_scalar, long& N_bytes_vector )
 {
 
   std::ofstream os;
   
   long N_l = N_tot;
   long offset = 0;
-	long N_tot = N_l*N_l;
-	long N_bytes_scalar  =   N_tot * sizeof(float);
-	long N_bytes_vector  = 2*N_tot * sizeof(float);
+	long N_all = N_l*N_l;
+	     N_bytes_scalar  =   N_all * sizeof(float);
+	     N_bytes_vector  = 3*N_all * sizeof(float);
   long bin_size_scalar = N_bytes_scalar + sizeof(uint64_t);// 2nd term is the size of the the leading integer announcing the numbers n the data chunk
   long bin_size_vector = N_bytes_vector + sizeof(uint64_t);
 
@@ -134,6 +139,8 @@ void simulation::write_vti_header( std::string file_name )
     if(!os){
       std::cout << "Cannot write vti header to file '" << file_name << "'!\n";
     }
+
+    std::cout << "N_tot = " << N_l << std::endl;
     
     // write header	
 		int extend_l[2]  = {0, 0};
@@ -143,10 +150,10 @@ void simulation::write_vti_header( std::string file_name )
     os << "<VTKFile type=\"ImageData\" version=\"1.0\" byte_order=\"LittleEndian\" header_type=\"UInt64\">" << std::endl;	
     os << "  <ImageData WholeExtent=\"" << extend_l[0] << " " << extend_r[0] << " " 
                                         << extend_l[1] << " " << extend_r[1] << " " 
-                                        << "0" << " " << "0"
+                                        << "0" << " " << "1"
 				 << "\" Origin=\""  << origin[0]  << " " << origin[1]  << " " << origin[2] 
 				 << "\" Spacing=\"" << dx << " " << dx << " " << 1.
-         << "\" Direction=\"0 0 1 0 1 0 1 0 0\">" << std::endl; // FORTRAN -> C order (no effect..)
+         << "\" Direction=\"1 0 0 0 1 0 0 0 1\">" << std::endl;
     
     os << "      <FieldData>" << std::endl;
     os << "        <DataArray type=\"Float32\" Name=\"TimeValue\" NumberOfTuples=\"1\" format=\"ascii\">" << std::endl;
@@ -156,18 +163,18 @@ void simulation::write_vti_header( std::string file_name )
         
 		os << "    <Piece Extent=\"" << extend_l[0] << " " << extend_r[0] << " " 
                                  << extend_l[1] << " " << extend_r[1] << " " 
-                                 << "0" << " " << "0" << "\">" << std::endl;
+                                 << "0" << " " << "1" << "\">" << std::endl;
     
-    os << "      <PointData>" << std::endl;
-    os << "      </PointData>" << std::endl;
     os << "      <CellData>" << std::endl;
     os << "        <DataArray type=\"Float32\" Name=\"E\" NumberOfComponents=\"3\" format=\"appended\" offset=\"" << offset << "\">" << std::endl;
     os << "        </DataArray>" << std::endl;
     offset += bin_size_vector;
-    os << "        <DataArray type=\"Float32\" Name=\"B\" NumberOfComponents=\"3\" format=\"appended\" offset=\"" << offset << "\">" << std::endl;
-    os << "        </DataArray>" << std::endl;
-    offset += bin_size_vector;
+    // os << "        <DataArray type=\"Float32\" Name=\"B\" NumberOfComponents=\"3\" format=\"appended\" offset=\"" << offset << "\">" << std::endl;
+    // os << "        </DataArray>" << std::endl;
+    // offset += bin_size_vector;
     os << "      </CellData>" << std::endl;
+    os << "      <PointData>" << std::endl;
+    os << "      </PointData>" << std::endl;
     os << "    </Piece>" << std::endl;
     os << "  </ImageData>" << std::endl;
     os << "  <AppendedData encoding=\"raw\">" << std::endl;
