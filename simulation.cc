@@ -77,7 +77,7 @@ void simulation::print_vti()
   write_vti_header( file_name, N_bytes_scalar, N_bytes_vector );
 
   print_mpi_vector( file_name, N_bytes_vector, E );
-  // print_mpi_vector( file_name, N_bytes_vector, B );
+  print_mpi_vector( file_name, N_bytes_vector, B );
 
   write_vti_footer( file_name );
 
@@ -113,7 +113,7 @@ void simulation::print_mpi_vector( std::string file_name, long& N_bytes_vector, 
   
   // write data
   MPI_File_set_view(mpi_file, mpi_eof, vti_float3, vti_subarray_vector, "native", MPI_INFO_NULL);
-  MPI_File_write_all(mpi_file, float_array_vector, N_tot*N_tot, vti_float3, MPI_STATUS_IGNORE);
+  MPI_File_write_all(mpi_file, float_array_vector, N[0]*N[1], vti_float3, MPI_STATUS_IGNORE);
   
   // close file
   MPI_File_close(&mpi_file);  
@@ -139,8 +139,6 @@ void simulation::write_vti_header( std::string file_name, long& N_bytes_scalar, 
     if(!os){
       std::cout << "Cannot write vti header to file '" << file_name << "'!\n";
     }
-
-    std::cout << "N_tot = " << N_l << std::endl;
     
     // write header	
 		int extend_l[2]  = {0, 0};
@@ -169,9 +167,9 @@ void simulation::write_vti_header( std::string file_name, long& N_bytes_scalar, 
     os << "        <DataArray type=\"Float32\" Name=\"E\" NumberOfComponents=\"3\" format=\"appended\" offset=\"" << offset << "\">" << std::endl;
     os << "        </DataArray>" << std::endl;
     offset += bin_size_vector;
-    // os << "        <DataArray type=\"Float32\" Name=\"B\" NumberOfComponents=\"3\" format=\"appended\" offset=\"" << offset << "\">" << std::endl;
-    // os << "        </DataArray>" << std::endl;
-    // offset += bin_size_vector;
+    os << "        <DataArray type=\"Float32\" Name=\"B\" NumberOfComponents=\"3\" format=\"appended\" offset=\"" << offset << "\">" << std::endl;
+    os << "        </DataArray>" << std::endl;
+    offset += bin_size_vector;
     os << "      </CellData>" << std::endl;
     os << "      <PointData>" << std::endl;
     os << "      </PointData>" << std::endl;
@@ -181,6 +179,8 @@ void simulation::write_vti_header( std::string file_name, long& N_bytes_scalar, 
     os << "   _";
                                 
     os.close();
+
+    // something is wrong with the offset!!!
   
   }MPI_Barrier(MPI_COMM_WORLD);
 
