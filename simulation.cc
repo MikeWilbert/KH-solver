@@ -18,9 +18,9 @@ cfl(cfl_)
   N_bd[1] = N[1] + 2*BD;
 
   // create derived MPI_datatypes for vti output
-  int size_total[3] = { N_tot,N_tot,1 };
-  int mpi_start[3]  = { mpi_coords[0]*N[0],mpi_coords[1]*N[1],0 };
-  int mpi_size[3]   = {               N[0],              N[1],1 };
+  int size_total[3] = { static_cast<int>(N_tot)             ,static_cast<int>(N_tot             ),1 };
+  int mpi_start[3]  = { static_cast<int>(mpi_coords[0]*N[0]),static_cast<int>(mpi_coords[1]*N[1]),0 };
+  int mpi_size[3]   = { static_cast<int>(              N[0]),static_cast<int>(              N[1]),1 };
 
   MPI_Type_contiguous(3, MPI_FLOAT, &vti_float3);
   MPI_Type_commit(&vti_float3);
@@ -44,24 +44,25 @@ cfl(cfl_)
 
 void simulation::setup()
 {
+  time = 0.;
 
   L = 2.;
   dx = L / N_tot;
-  time = 0.;
 
   for( size_t ix = BD; ix < N_bd[0] - BD; ix++ ){
   for( size_t iy = BD; iy < N_bd[1] - BD; iy++ ){
 
-    double x_val = ( ix - BD + 0.5 ) * dx;
-    double y_val = ( iy - BD + 0.5 ) * dx;
+    double x_val = ( ix - BD + 0.5 ) * dx + mpi_coords[0] * N_tot / mpi_dims[0] * dx;
+    double y_val = ( iy - BD + 0.5 ) * dx + mpi_coords[1] * N_tot / mpi_dims[1] * dx;
 
-    E(0,ix,iy) = sin( L/(2.*M_PI) * x_val );
-    E(1,ix,iy) = cos( L/(2.*M_PI) * x_val );
-    E(2,ix,iy) = 1.;
+    E(0,ix,iy) = x_val;
+    E(1,ix,iy) = y_val;
+    E(2,ix,iy) = mpi_coords[0];
 
-    B(0,ix,iy) = sin( L/(2.*M_PI) * y_val );
-    B(1,ix,iy) = cos( L/(2.*M_PI) * y_val );
-    B(2,ix,iy) = 1.;
+    B(0,ix,iy) = sin( (2.*M_PI/L) * x_val );
+    B(1,ix,iy) = cos( (2.*M_PI/L) * y_val );
+    B(2,ix,iy) = mpi_coords[1];
+
 
   }}
 
@@ -104,7 +105,7 @@ void simulation::print_mpi_vector( std::string file_name, long& N_bytes_vector, 
   for( size_t ix = BD; ix < N_bd[0] - BD; ix++ ){
   for( size_t iy = BD; iy < N_bd[1] - BD; iy++ ){
     
-    size_t id = (ix-BD) * N[1] + (iy-BD); // AUF DIE REIHENFOLGE AUFPASSEN!!
+    size_t id = (ix-BD) * N[1] + (iy-BD);
     
     float_array_vector[3*id+0] = float( field(0,ix,iy) );
     float_array_vector[3*id+1] = float( field(1,ix,iy) );
@@ -129,7 +130,7 @@ void simulation::write_vti_header( std::string file_name, long& N_bytes_scalar, 
 	long N_all = N_l*N_l;
 	     N_bytes_scalar  =   N_all * sizeof(float);
 	     N_bytes_vector  = 3*N_all * sizeof(float);
-  long bin_size_scalar = N_bytes_scalar + sizeof(uint64_t);// 2nd term is the size of the the leading integer announcing the numbers n the data chunk
+  // long bin_size_scalar = N_bytes_scalar + sizeof(uint64_t);// 2nd term is the size of the the leading integer announcing the numbers n the data chunk
   long bin_size_vector = N_bytes_vector + sizeof(uint64_t);
 
   // header
@@ -142,7 +143,7 @@ void simulation::write_vti_header( std::string file_name, long& N_bytes_scalar, 
     
     // write header	
 		int extend_l[2]  = {0, 0};
-		int extend_r[2]  = {N_tot, N_tot};
+		int extend_r[2]  = {static_cast<int>(N_tot), static_cast<int>(N_tot)};
 		double origin[3] = {0.,0.,0.};
     
     os << "<VTKFile type=\"ImageData\" version=\"1.0\" byte_order=\"LittleEndian\" header_type=\"UInt64\">" << std::endl;	
@@ -150,8 +151,8 @@ void simulation::write_vti_header( std::string file_name, long& N_bytes_scalar, 
                                         << extend_l[1] << " " << extend_r[1] << " " 
                                         << "0" << " " << "1"
 				 << "\" Origin=\""  << origin[0]  << " " << origin[1]  << " " << origin[2] 
-				 << "\" Spacing=\"" << dx << " " << dx << " " << 1.
-         << "\" Direction=\"1 0 0 0 1 0 0 0 1\">" << std::endl;
+				 << "\" Spacing=\"" << dx << " " << dx << " " << dx
+         << "\" Direction=\"0 1 0 1 0 0 0 0 1\">" << std::endl;
     
     os << "      <FieldData>" << std::endl;
     os << "        <DataArray type=\"Float32\" Name=\"TimeValue\" NumberOfTuples=\"1\" format=\"ascii\">" << std::endl;
@@ -179,8 +180,6 @@ void simulation::write_vti_header( std::string file_name, long& N_bytes_scalar, 
     os << "   _";
                                 
     os.close();
-
-    // something is wrong with the offset!!!
   
   }MPI_Barrier(MPI_COMM_WORLD);
 
