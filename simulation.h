@@ -19,6 +19,9 @@ class simulation
     MPI_Datatype vti_float3;
     float* float_array_vector;
 
+    MPI_Datatype mpi_slice_inner_W, mpi_slice_inner_E, mpi_slice_inner_S, mpi_slice_inner_N;
+    MPI_Datatype mpi_slice_outer_W, mpi_slice_outer_E, mpi_slice_outer_S, mpi_slice_outer_N;
+
     const size_t N_tot;
     const size_t BD;
     const size_t cfl;
@@ -36,6 +39,8 @@ class simulation
 
     void init_mpi();
     void setup();
+    void set_ghost_cells( ArrayND<double>& field );
+
     void print_vti();
     void write_vti_header( std::string file_name, long& N_bytes_scalar, long& N_bytes_vector );
     void write_vti_footer( std::string file_name );

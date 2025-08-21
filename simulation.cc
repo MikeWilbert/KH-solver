@@ -66,6 +66,18 @@ void simulation::setup()
 
   }}
 
+  set_ghost_cells(E);
+  set_ghost_cells(B);
+
+}
+
+void simulation::set_ghost_cells( ArrayND<double>& field )
+{
+
+  // size_t num_fields = field.dim_size( 0 );
+
+  
+
 }
 
 void simulation::print_vti()
@@ -237,14 +249,75 @@ void simulation::init_mpi()
 
   int diags[4][2] = {
       {(mpi_coords[0]-1+px)%px, (mpi_coords[1]-1+py)%py}, // TL
-      {(mpi_coords[0]+1)%px,    (mpi_coords[1]-1+py)%py}, // TR
-      {(mpi_coords[0]-1+px)%px, (mpi_coords[1]+1)%py},    // BL
-      {(mpi_coords[0]+1)%px,    (mpi_coords[1]+1)%py}     // BR
+      {(mpi_coords[0]+1   )%px, (mpi_coords[1]-1+py)%py}, // TR
+      {(mpi_coords[0]-1+px)%px, (mpi_coords[1]+1)   %py}, // BL
+      {(mpi_coords[0]+1   )%px, (mpi_coords[1]+1)   %py}  // BR
   };
 
   for(int i=0; i<4; ++i) {
       MPI_Cart_rank(cart_comm, diags[i], &mpi_neighbors[4+i]);
   }
+
+  // create subarrays for ghost cell exchange
+
+  int sizes   [2];
+  int subsizes[2];
+  int starts  [2];
+  int order = MPI_ORDER_C;
+  MPI_Datatype type  = MPI_DOUBLE;
+
+  sizes[0] = N_tot;
+  sizes[1] = N_tot;
+
+  // West/East
+  subsizes[0] = BD;
+  subsizes[1] = N[1];
+  starts[1] = BD;
+
+  // West - outer
+  starts[0] = 0;
+
+  MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_slice_outer_W );
+
+  // West - inner
+  starts[0] = BD;
+
+  MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_slice_inner_W );
+
+  // East - inner
+  starts[0] = N[0];
+
+  MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_slice_inner_E );
+
+  // East - outer
+  starts[0] = N[0] + BD;
+
+  MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_slice_outer_E );
+
+  // Soust/North
+  subsizes[0] = N[0];
+  subsizes[1] = BD;
+  starts[0] = BD;
+
+  // West - outer
+  starts[1] = 0;
+
+  MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_slice_outer_S );
+
+  // West - inner
+  starts[1] = BD;
+
+  MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_slice_inner_S );
+
+  // East - inner
+  starts[1] = N[1];
+
+  MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_slice_inner_N );
+
+  // East - outer
+  starts[1] = N[1] + BD;
+
+  MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_slice_outer_N );
 
   // print info
   if(mpi_rank==0)
@@ -258,6 +331,6 @@ void simulation::init_mpi()
 simulation::~simulation()
 {
 
-
+  delete[] float_array_vector;
 
 }

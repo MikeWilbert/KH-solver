@@ -52,4 +52,10 @@ public:
 
     // --- Utility: total number of elements ---
     size_t size() const { return data.size(); }
+
+    // --- Get size of a specific dimension ---
+    size_t dim_size(size_t dim) const {
+    assert(dim < dims.size());
+    return dims[dim];
+}
 };
