@@ -11,28 +11,6 @@ cfl(cfl_)
 
   init_mpi();
 
-  N[0] = N_tot / mpi_dims[0];
-  N[1] = N_tot / mpi_dims[1];
-
-  N_bd[0] = N[0] + 2*BD;
-  N_bd[1] = N[1] + 2*BD;
-
-  // create derived MPI_datatypes for vti output
-  int size_total[3] = { static_cast<int>(N_tot)             ,static_cast<int>(N_tot             ),1 };
-  int mpi_start[3]  = { static_cast<int>(mpi_coords[0]*N[0]),static_cast<int>(mpi_coords[1]*N[1]),0 };
-  int mpi_size[3]   = { static_cast<int>(              N[0]),static_cast<int>(              N[1]),1 };
-
-  MPI_Type_contiguous(3, MPI_FLOAT, &vti_float3);
-  MPI_Type_commit(&vti_float3);
-
-  MPI_Type_create_subarray(3, size_total, mpi_size, mpi_start, MPI_ORDER_C, MPI_FLOAT, &vti_subarray);
-  MPI_Type_commit(&vti_subarray);
-  
-  MPI_Type_create_subarray(3, size_total,mpi_size, mpi_start, MPI_ORDER_C, vti_float3, &vti_subarray_vector);
-  MPI_Type_commit(&vti_subarray_vector);
-
-  float_array_vector = new float[ 3*N[0]*N[1] ];
-
   E.resize({3, N_bd[0], N_bd[1]});
   B.resize({3, N_bd[0], N_bd[1]});
 
@@ -74,9 +52,51 @@ void simulation::setup()
 void simulation::set_ghost_cells( ArrayND<double>& field )
 {
 
-  // size_t num_fields = field.dim_size( 0 );
+  size_t num_fields = field.dim_size( 0 );
 
-  
+  std::vector<double> buffer( N_bd[0]*N_bd[1] );
+
+  // exchange ghost cells for each component
+  for( size_t i = 0; i < num_fields; i++ )
+  {
+
+    // fill buffer for field component
+    for( size_t ix = 0; ix < N_bd[0]; ix++ ){
+    for( size_t iy = 0; iy < N_bd[1]; iy++ ){
+
+      size_t id = ix * N_bd[1] + iy;
+
+      buffer[id] = field(i,ix,iy);
+
+    }}
+
+    // W -> E
+    MPI_Sendrecv( buffer.data(), 1, mpi_slice_inner_W, mpi_neighbors[0], 123,
+                  buffer.data(), 1, mpi_slice_outer_E, mpi_neighbors[1], 123, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+    // E -> W
+    MPI_Sendrecv( buffer.data(), 1, mpi_slice_inner_E, mpi_neighbors[1], 123,
+                  buffer.data(), 1, mpi_slice_outer_W, mpi_neighbors[0], 123, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+    // S -> N
+    MPI_Sendrecv( buffer.data(), 1, mpi_slice_inner_S, mpi_neighbors[2], 123,
+                  buffer.data(), 1, mpi_slice_outer_N, mpi_neighbors[3], 123, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+    // N -> S
+    MPI_Sendrecv( buffer.data(), 1, mpi_slice_inner_N, mpi_neighbors[3], 123,
+                  buffer.data(), 1, mpi_slice_outer_S, mpi_neighbors[2], 123, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+    // get updated field components from buffer
+    for( size_t ix = 0; ix < N_bd[0]; ix++ ){
+    for( size_t iy = 0; iy < N_bd[1]; iy++ ){
+
+      size_t id = ix * N_bd[1] + iy;
+
+      field(i,ix,iy) = buffer[id];
+
+    }}
+
+  }
 
 }
 
@@ -258,6 +278,13 @@ void simulation::init_mpi()
       MPI_Cart_rank(cart_comm, diags[i], &mpi_neighbors[4+i]);
   }
 
+  // set local sizes
+  N[0] = N_tot / mpi_dims[0];
+  N[1] = N_tot / mpi_dims[1];
+
+  N_bd[0] = N[0] + 2*BD;
+  N_bd[1] = N[1] + 2*BD;
+
   // create subarrays for ghost cell exchange
 
   int sizes   [2];
@@ -266,58 +293,82 @@ void simulation::init_mpi()
   int order = MPI_ORDER_C;
   MPI_Datatype type  = MPI_DOUBLE;
 
-  sizes[0] = N_tot;
-  sizes[1] = N_tot;
+  sizes[0] = N_bd[0];
+  sizes[1] = N_bd[1];
 
   // West/East
   subsizes[0] = BD;
   subsizes[1] = N[1];
-  starts[1] = BD;
+  starts  [1] = BD;
 
   // West - outer
   starts[0] = 0;
 
   MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_slice_outer_W );
+  MPI_Type_commit(&mpi_slice_outer_W);
 
   // West - inner
   starts[0] = BD;
 
   MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_slice_inner_W );
+  MPI_Type_commit(&mpi_slice_inner_W);
 
   // East - inner
   starts[0] = N[0];
 
   MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_slice_inner_E );
+  MPI_Type_commit(&mpi_slice_inner_E);
 
   // East - outer
   starts[0] = N[0] + BD;
 
   MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_slice_outer_E );
+  MPI_Type_commit(&mpi_slice_outer_E);
 
   // Soust/North
   subsizes[0] = N[0];
   subsizes[1] = BD;
-  starts[0] = BD;
+  starts  [0] = BD;
 
   // West - outer
   starts[1] = 0;
 
   MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_slice_outer_S );
+  MPI_Type_commit(&mpi_slice_outer_S);
 
   // West - inner
   starts[1] = BD;
 
   MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_slice_inner_S );
+  MPI_Type_commit(&mpi_slice_inner_S);
 
   // East - inner
   starts[1] = N[1];
 
   MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_slice_inner_N );
+  MPI_Type_commit(&mpi_slice_inner_N);
 
   // East - outer
   starts[1] = N[1] + BD;
 
   MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_slice_outer_N );
+  MPI_Type_commit(&mpi_slice_outer_N);
+
+  // create derived MPI_datatypes for vti output
+  int size_total[3] = { static_cast<int>(N_tot)             ,static_cast<int>(N_tot             ),1 };
+  int mpi_start[3]  = { static_cast<int>(mpi_coords[0]*N[0]),static_cast<int>(mpi_coords[1]*N[1]),0 };
+  int mpi_size[3]   = { static_cast<int>(              N[0]),static_cast<int>(              N[1]),1 };
+
+  MPI_Type_contiguous(3, MPI_FLOAT, &vti_float3);
+  MPI_Type_commit(&vti_float3);
+
+  MPI_Type_create_subarray(3, size_total, mpi_size, mpi_start, MPI_ORDER_C, MPI_FLOAT, &vti_subarray);
+  MPI_Type_commit(&vti_subarray);
+  
+  MPI_Type_create_subarray(3, size_total,mpi_size, mpi_start, MPI_ORDER_C, vti_float3, &vti_subarray_vector);
+  MPI_Type_commit(&vti_subarray_vector);
+
+  float_array_vector = new float[ 3*N[0]*N[1] ];
 
   // print info
   if(mpi_rank==0)
