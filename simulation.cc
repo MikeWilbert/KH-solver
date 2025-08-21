@@ -33,9 +33,9 @@ void simulation::setup()
     double x_val = ( ix - BD + 0.5 ) * dx + mpi_coords[0] * N_tot / mpi_dims[0] * dx;
     double y_val = ( iy - BD + 0.5 ) * dx + mpi_coords[1] * N_tot / mpi_dims[1] * dx;
 
-    E(0,ix,iy) = x_val;
-    E(1,ix,iy) = y_val;
-    E(2,ix,iy) = mpi_coords[0];
+    E(0,ix,iy) = mpi_rank;
+    E(1,ix,iy) = mpi_coords[0];
+    E(2,ix,iy) = mpi_coords[1];
 
     B(0,ix,iy) = sin( (2.*M_PI/L) * x_val );
     B(1,ix,iy) = cos( (2.*M_PI/L) * y_val );
@@ -46,6 +46,21 @@ void simulation::setup()
 
   set_ghost_cells(E);
   set_ghost_cells(B);
+
+  // testing: check ghost vales
+  for( size_t iy = BD; iy < N_bd[1] - BD; iy++ ){
+
+    E(0,BD  ,iy) = E(0,BD-1,iy);
+    E(0,BD+1,iy) = E(0,BD-2,iy);
+    E(0,N_bd[0]-3,iy) = E(0,N_bd[0]-1,iy);
+    E(0,N_bd[0]-4,iy) = E(0,N_bd[0]-2,iy);
+
+    B(0,BD  ,iy) = B(0,BD-1,iy);
+    B(0,BD+1,iy) = B(0,BD-2,iy);
+    B(0,N_bd[0]-3,iy) = B(0,N_bd[0]-1,iy);
+    B(0,N_bd[0]-4,iy) = B(0,N_bd[0]-2,iy);
+
+  }
 
 }
 
