@@ -12,15 +12,31 @@ class simulation
 
   private:
 
+    MPI_Comm cart_comm;
     int mpi_rank, mpi_size, mpi_dims[2], mpi_coords[2];
     int mpi_neighbors[8]; // W,E,S,N, NW, NE, SW, SE
-    MPI_Datatype vti_subarray;
-    MPI_Datatype vti_subarray_vector;
-    MPI_Datatype vti_float3;
+    MPI_Datatype vti_subarray        = MPI_DATATYPE_NULL;
+    MPI_Datatype vti_subarray_vector = MPI_DATATYPE_NULL;
+    MPI_Datatype vti_float3          = MPI_DATATYPE_NULL;
     float* float_array_vector;
 
-    MPI_Datatype mpi_slice_inner_W, mpi_slice_inner_E, mpi_slice_inner_S, mpi_slice_inner_N;
-    MPI_Datatype mpi_slice_outer_W, mpi_slice_outer_E, mpi_slice_outer_S, mpi_slice_outer_N;
+    MPI_Datatype mpi_slice_inner_W = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_slice_inner_E = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_slice_inner_S = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_slice_inner_N = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_slice_outer_W = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_slice_outer_E = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_slice_outer_S = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_slice_outer_N = MPI_DATATYPE_NULL;
+
+    MPI_Datatype mpi_edge_inner_SW = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_edge_inner_SE = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_edge_inner_NW = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_edge_inner_NE = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_edge_outer_SW = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_edge_outer_SE = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_edge_outer_NW = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_edge_outer_NE = MPI_DATATYPE_NULL;
 
     const size_t N_tot;
     const size_t BD;

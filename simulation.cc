@@ -87,19 +87,19 @@ void simulation::set_ghost_cells( ArrayND<double>& field )
 
     // W -> E
     MPI_Sendrecv( buffer.data(), 1, mpi_slice_inner_W, mpi_neighbors[0], 123,
-                  buffer.data(), 1, mpi_slice_outer_E, mpi_neighbors[1], 123, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                  buffer.data(), 1, mpi_slice_outer_E, mpi_neighbors[1], 123, cart_comm, MPI_STATUS_IGNORE);
 
     // E -> W
     MPI_Sendrecv( buffer.data(), 1, mpi_slice_inner_E, mpi_neighbors[1], 123,
-                  buffer.data(), 1, mpi_slice_outer_W, mpi_neighbors[0], 123, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                  buffer.data(), 1, mpi_slice_outer_W, mpi_neighbors[0], 123, cart_comm, MPI_STATUS_IGNORE);
 
     // S -> N
     MPI_Sendrecv( buffer.data(), 1, mpi_slice_inner_S, mpi_neighbors[2], 123,
-                  buffer.data(), 1, mpi_slice_outer_N, mpi_neighbors[3], 123, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                  buffer.data(), 1, mpi_slice_outer_N, mpi_neighbors[3], 123, cart_comm, MPI_STATUS_IGNORE);
 
     // N -> S
     MPI_Sendrecv( buffer.data(), 1, mpi_slice_inner_N, mpi_neighbors[3], 123,
-                  buffer.data(), 1, mpi_slice_outer_S, mpi_neighbors[2], 123, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                  buffer.data(), 1, mpi_slice_outer_S, mpi_neighbors[2], 123, cart_comm, MPI_STATUS_IGNORE);
 
     // get updated field components from buffer
     for( size_t ix = 0; ix < N_bd[0]; ix++ ){
@@ -138,16 +138,16 @@ void simulation::print_mpi_vector( std::string file_name, long& N_bytes_vector, 
     std::ofstream binary_os(file_name.c_str(), std::ios::out | std::ios::app | std::ios::binary );
     binary_os.write(reinterpret_cast<const char*>(&N_bytes_vector),sizeof(uint64_t)); // size of following binary package
     binary_os.close();
-  }MPI_Barrier(MPI_COMM_WORLD);
+  }MPI_Barrier(cart_comm);
   
   // open file
   MPI_File mpi_file;
-  MPI_File_open(MPI_COMM_WORLD, file_name.c_str(), MPI_MODE_APPEND|MPI_MODE_WRONLY, MPI_INFO_NULL, &mpi_file);
+  MPI_File_open(cart_comm, file_name.c_str(), MPI_MODE_APPEND|MPI_MODE_WRONLY, MPI_INFO_NULL, &mpi_file);
   
   // offset to end of file
   MPI_Offset mpi_eof;
   MPI_File_get_position(mpi_file, &mpi_eof);
-  MPI_Barrier(MPI_COMM_WORLD);
+  MPI_Barrier(cart_comm);
   
   for( size_t ix = BD; ix < N_bd[0] - BD; ix++ ){
   for( size_t iy = BD; iy < N_bd[1] - BD; iy++ ){
@@ -228,7 +228,7 @@ void simulation::write_vti_header( std::string file_name, long& N_bytes_scalar, 
                                 
     os.close();
   
-  }MPI_Barrier(MPI_COMM_WORLD);
+  }MPI_Barrier(cart_comm);
 
 }
 
@@ -250,7 +250,7 @@ void simulation::write_vti_footer( std::string file_name )
     os<< "</VTKFile>" << std::endl;
 	
     os.close();
-  }MPI_Barrier(MPI_COMM_WORLD);
+  }MPI_Barrier(cart_comm);
 
 }
 
@@ -269,9 +269,10 @@ void simulation::init_mpi()
   int periods[2] = {1, 1}; // periodic in both directions
   int reorder = 1;
 
-  MPI_Comm cart_comm;
   MPI_Cart_create(MPI_COMM_WORLD, ndims, mpi_dims, periods, reorder, &cart_comm);
 
+  MPI_Comm_rank  (cart_comm, &mpi_rank);
+  MPI_Comm_size  (cart_comm, &mpi_size);
   MPI_Cart_coords(cart_comm, mpi_rank, ndims, mpi_coords);
 
   // get direct neighbors
