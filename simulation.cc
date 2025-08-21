@@ -302,7 +302,6 @@ void simulation::init_mpi()
   N_bd[1] = N[1] + 2*BD;
 
   // create subarrays for ghost cell exchange
-
   int sizes   [2];
   int subsizes[2];
   int starts  [2];
@@ -311,6 +310,8 @@ void simulation::init_mpi()
 
   sizes[0] = N_bd[0];
   sizes[1] = N_bd[1];
+
+  // faces
 
   // West/East
   subsizes[0] = BD;
@@ -369,6 +370,66 @@ void simulation::init_mpi()
 
   MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_slice_outer_N );
   MPI_Type_commit(&mpi_slice_outer_N);
+
+  // edges
+  subsizes[0] = BD;
+  subsizes[1] = BD;
+
+  // SW - inner
+  starts[0] = BD;
+  starts[1] = BD;
+
+  MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_edge_inner_SW );
+  MPI_Type_commit(&mpi_edge_inner_SW);
+
+  // SW - outer
+  starts[0] = 0;
+  starts[1] = 0;
+
+  MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_edge_outer_SW );
+  MPI_Type_commit(&mpi_edge_outer_SW);
+
+  // SE - inner
+  starts[0] = N[0];
+  starts[1] = BD;
+
+  MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_edge_inner_SE );
+  MPI_Type_commit(&mpi_edge_inner_SE);
+
+  // SE - outer
+  starts[0] = N[0] + BD;
+  starts[1] = 0;
+
+  MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_edge_outer_SE );
+  MPI_Type_commit(&mpi_edge_outer_SE);
+
+  // NW - inner
+  starts[0] = BD;
+  starts[1] = N[1];
+
+  MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_edge_inner_NW );
+  MPI_Type_commit(&mpi_edge_inner_NW);
+
+  // NW - outer
+  starts[0] = 0;
+  starts[1] = N[1] + BD;
+
+  MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_edge_outer_NW );
+  MPI_Type_commit(&mpi_edge_outer_NW);
+
+  // NE - inner
+  starts[0] = N[0];
+  starts[1] = N[1];
+
+  MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_edge_inner_NE );
+  MPI_Type_commit(&mpi_edge_inner_NE);
+
+  // NE - outer
+  starts[0] = N[0] + BD;
+  starts[1] = N[1] + BD;
+
+  MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_edge_outer_NE );
+  MPI_Type_commit(&mpi_edge_outer_NE);
 
   // create derived MPI_datatypes for vti output
   int size_total[3] = { static_cast<int>(N_tot)             ,static_cast<int>(N_tot             ),1 };
