@@ -47,20 +47,20 @@ void simulation::setup()
   set_ghost_cells(E);
   set_ghost_cells(B);
 
-  // testing: check ghost vales
-  for( size_t iy = BD; iy < N_bd[1] - BD; iy++ ){
+  // // testing: check ghost vales
+  // for( size_t iy = BD; iy < N_bd[1] - BD; iy++ ){
 
-    E(0,BD  ,iy) = E(0,BD-1,iy);
-    E(0,BD+1,iy) = E(0,BD-2,iy);
-    E(0,N_bd[0]-3,iy) = E(0,N_bd[0]-1,iy);
-    E(0,N_bd[0]-4,iy) = E(0,N_bd[0]-2,iy);
+  //   E(0,BD  ,iy) = E(0,BD-1,iy);
+  //   E(0,BD+1,iy) = E(0,BD-2,iy);
+  //   E(0,N_bd[0]-3,iy) = E(0,N_bd[0]-1,iy);
+  //   E(0,N_bd[0]-4,iy) = E(0,N_bd[0]-2,iy);
 
-    B(0,BD  ,iy) = B(0,BD-1,iy);
-    B(0,BD+1,iy) = B(0,BD-2,iy);
-    B(0,N_bd[0]-3,iy) = B(0,N_bd[0]-1,iy);
-    B(0,N_bd[0]-4,iy) = B(0,N_bd[0]-2,iy);
+  //   B(0,BD  ,iy) = B(0,BD-1,iy);
+  //   B(0,BD+1,iy) = B(0,BD-2,iy);
+  //   B(0,N_bd[0]-3,iy) = B(0,N_bd[0]-1,iy);
+  //   B(0,N_bd[0]-4,iy) = B(0,N_bd[0]-2,iy);
 
-  }
+  // }
 
 }
 
@@ -293,6 +293,14 @@ void simulation::init_mpi()
   for(int i=0; i<4; ++i) {
       MPI_Cart_rank(cart_comm, diags[i], &mpi_neighbors[4+i]);
   }
+
+  // check if total resolution is dividable by processor dimensions
+  if ( N_tot % mpi_dims[0] != 0 || N_tot % mpi_dims[1] != 0 ) {
+    std::cerr << "Spatial resolution is not dividable by processor dimensions!\n";
+    std::cerr << "N     = " << N_tot << std::endl; 
+    std::cerr << "pdims = " << mpi_dims[0] << "x" << mpi_dims[1] << std::endl; 
+    MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+}
 
   // set local sizes
   N[0] = N_tot / mpi_dims[0];
