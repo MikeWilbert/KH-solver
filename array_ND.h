@@ -50,6 +50,17 @@ public:
         return data[i*dims[1]*dims[2] + j*dims[2] + k];
     }
 
+    // --- 4D indexing operator ---
+    T& operator()(size_t i, size_t j, size_t k, size_t m) {
+        assert(dims.size() == 4);
+        return data[i*dims[1]*dims[2]*dims[3] + j*dims[2]*dims[3] + k*dims[3] + m];
+    }
+
+    const T& operator()(size_t i, size_t j, size_t k, size_t m) const {
+        assert(dims.size() == 4);
+        return data[i*dims[1]*dims[2]*dims[3] + j*dims[2]*dims[3] + k*dims[3] + m];
+    }
+
     // --- Utility: total number of elements ---
     size_t size() const { return data.size(); }
 

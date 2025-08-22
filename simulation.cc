@@ -6,13 +6,19 @@
 simulation::simulation( const size_t N_, const size_t BD_, const double cfl_ ) :
 N_tot(N_), 
 BD(BD_), 
-cfl(cfl_) 
+cfl(cfl_),
+time(0.),
+num_outputs(0)
 {
 
   init_mpi();
 
   E.resize({3, N_bd[0], N_bd[1]});
   B.resize({3, N_bd[0], N_bd[1]});
+
+  RHS_EB       .resize({6, N[0]   , N[1]   });
+  num_flux_EB_x.resize({6, N[0]+1 , N[1]  });
+  num_flux_EB_y.resize({6, N[0]   , N[1]+1});
 
   setup();
 
@@ -26,9 +32,10 @@ void simulation::setup()
 
   L = 2.;
   dx = L / N_tot;
+  dx_inv = 1./dx;
 
-  for( size_t ix = BD; ix < N_bd[0] - BD; ix++ ){
-  for( size_t iy = BD; iy < N_bd[1] - BD; iy++ ){
+  for( size_t ix = start_i[0]; ix < end_i[0]; ix++ ){
+  for( size_t iy = start_i[1]; iy < end_i[1]; iy++ ){
 
     double x_val = ( ix - BD + 0.5 ) * dx + mpi_coords[0] * N_tot / mpi_dims[0] * dx;
     double y_val = ( iy - BD + 0.5 ) * dx + mpi_coords[1] * N_tot / mpi_dims[1] * dx;
@@ -39,24 +46,130 @@ void simulation::setup()
 
     B(0,ix,iy) = sin( (2.*M_PI/L) * x_val );
     B(1,ix,iy) = cos( (2.*M_PI/L) * y_val );
-    B(2,ix,iy) = mpi_coords[1];
-
+    B(2,ix,iy) = sin( (2.*M_PI/L) * x_val ) * cos( (2.*M_PI/L) * y_val );
 
   }}
 
   set_ghost_cells(E);
   set_ghost_cells(B);
 
-  // testing: check ghost edges
-  for( size_t ix = 0; ix < BD; ix++ ){
-  for( size_t iy = 0; iy < BD; iy++ ){
+}
 
-    E(0, ix+BD   ,iy+BD  ) = E(0,ix        ,iy        );
-    E(0, ix+N[0] ,iy+BD  ) = E(0,ix+N[0]+BD,iy        );
-    E(0, ix+BD   ,iy+N[1]) = E(0,ix        ,iy+N[1]+BD);
-    E(0, ix+N[0] ,iy+N[1]) = E(0,ix+N[0]+BD,iy+N[1]+BD);
+void simulation::run( const double run_time )
+{
+
+  double out_time = 0.;
+  double out_interval = 0.02;
+
+  do
+  {
+
+    step();
+
+    time += dt;
     
+    out_time += dt;
+    if(out_time > out_interval)
+    {
+      print_vti();
+      out_time -= out_interval;
+
+    }
+
+
+    if(mpi_rank==0){ std::cout << "\rSimulation time: " << time << "   " << std::flush; }
+
+
+
+  } while ( time < run_time );
+
+  if(mpi_rank==0){ std::cout << std::endl; }
+
+}
+
+void simulation::get_dt()
+{
+
+  dt = cfl * dx;
+
+}
+
+void simulation::get_RHS_EB( ArrayND<double>& RHS )
+{
+
+  for( size_t i = 0; i < 3; i++  )
+  {
+
+    for( size_t ix = 0; ix < N[0]+1; ix++ ){
+    for( size_t iy = 0; iy < N[1]  ; iy++ ){
+
+      size_t jx = ix+BD;
+      size_t jy = iy+BD;
+
+      num_flux_EB_x( i  , ix, iy ) = 0.5 * ( E( i, jx, jy ) + E( i, jx-1, jy   ) ) - 0.5 * dx / dt * ( E( i, jx, jy   ) - E( i, jx-1, jy   ) );
+      num_flux_EB_x( i+3, ix, iy ) = 0.5 * ( B( i, jx, jy ) + B( i, jx-1, jy   ) ) - 0.5 * dx / dt * ( B( i, jx, jy   ) - B( i, jx-1, jy   ) );
+
+    }}
+
+    for( size_t ix = 0; ix < N[0]  ; ix++ ){
+    for( size_t iy = 0; iy < N[1]+1; iy++ ){
+
+      size_t jx = ix+BD;
+      size_t jy = iy+BD;
+
+      num_flux_EB_y( i  , ix, iy ) = 0.5 * ( E( i, jx, jy ) + E( i, jx  , jy-1 ) ) - 0.5 * dx / dt * ( E( i, jx, jy   ) - E( i, jx  , jy-1 ) );
+      num_flux_EB_y( i+3, ix, iy ) = 0.5 * ( B( i, jx, jy ) + B( i, jx  , jy-1 ) ) - 0.5 * dx / dt * ( B( i, jx, jy   ) - B( i, jx  , jy-1 ) );
+
+    }}
+
+  }
+
+  for( size_t i = 0; i < 6; i++  )
+  {
+
+    for( size_t ix = 0; ix < N[0]; ix++ ){
+    for( size_t iy = 0; iy < N[1]; iy++ ){
+
+      RHS( i, ix, iy ) = - ( num_flux_EB_x( i, ix+1, iy   ) - num_flux_EB_x( i, ix, iy ) ) * dx_inv
+                         - ( num_flux_EB_y( i, ix  , iy+1 ) - num_flux_EB_y( i, ix, iy ) ) * dx_inv;
+
+    }}
+
+  }
+
+}
+
+void simulation::RK_step( const ArrayND<double>& RHS_EB, const double a_1 )
+{
+
+  for( size_t ix = 0; ix < N[0]; ix++ ){
+  for( size_t iy = 0; iy < N[1]; iy++ ){
+
+    size_t jx = ix+BD;
+    size_t jy = iy+BD;
+
+    E(0, jx, jy) = E(0, jx, jy) + a_1 * dt * RHS_EB( 0, ix, iy );
+    E(1, jx, jy) = E(1, jx, jy) + a_1 * dt * RHS_EB( 1, ix, iy );
+    E(2, jx, jy) = E(2, jx, jy) + a_1 * dt * RHS_EB( 2, ix, iy );
+
+    B(0, jx, jy) = B(0, jx, jy) + a_1 * dt * RHS_EB( 3, ix, iy );
+    B(1, jx, jy) = B(1, jx, jy) + a_1 * dt * RHS_EB( 4, ix, iy );
+    B(2, jx, jy) = B(2, jx, jy) + a_1 * dt * RHS_EB( 5, ix, iy );
+
   }}
+
+  set_ghost_cells(E);
+  set_ghost_cells(B);
+
+}
+
+void simulation::step()
+{
+
+  get_dt();
+
+  get_RHS_EB( RHS_EB );
+  RK_step   ( RHS_EB, 1. );
 
 }
 
@@ -130,7 +243,7 @@ void simulation::set_ghost_cells( ArrayND<double>& field )
 void simulation::print_vti()
 {
 
-  const std::string file_name = "/home/fs1/mw/Reconnection/mikePhy/output.vti";
+  const std::string file_name = "/home/fs1/mw/Reconnection/mikePhy/output_" + std::to_string(num_outputs) + ".vti";
 
   long N_bytes_scalar, N_bytes_vector;
 
@@ -140,6 +253,8 @@ void simulation::print_vti()
   print_mpi_vector( file_name, N_bytes_vector, B );
 
   write_vti_footer( file_name );
+
+  num_outputs += 1;
 
 }
 
@@ -330,6 +445,11 @@ void simulation::init_mpi()
 
   sizes[0] = N_bd[0];
   sizes[1] = N_bd[1];
+
+  start_i[0] = BD; 
+  start_i[1] = BD; 
+  end_i  [0] = N_bd[0] - BD;
+  end_i  [1] = N_bd[1] - BD;
 
   // faces
 

@@ -1,6 +1,6 @@
 log/
 .vscode/
 mike_phy
-
+machinefile
 
 *.o

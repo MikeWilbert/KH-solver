@@ -8,6 +8,7 @@ class simulation
   public:
 
     simulation( const size_t N_, const size_t BD_, const double cfl_ );
+    void run( const double run_time );
     ~simulation();
 
   private:
@@ -40,22 +41,37 @@ class simulation
 
     const size_t N_tot;
     const size_t BD;
-    const size_t cfl;
+    const double cfl;
 
     size_t N[2]; // local internal size (1D)
     size_t N_bd[2];
+
+    size_t start_i[2]; // start index inner celles
+    size_t end_i  [2]; // end   index inner celles
 
     double dt;
     double dx;
     double L;
     double time;
 
+    double dx_inv;
+
+    size_t num_outputs;
+
     ArrayND<double> E;
     ArrayND<double> B;
+
+    ArrayND<double> RHS_EB;
+    ArrayND<double> num_flux_EB_x;
+    ArrayND<double> num_flux_EB_y;
 
     void init_mpi();
     void setup();
     void set_ghost_cells( ArrayND<double>& field );
+    void step();
+    void get_dt();
+    void get_RHS_EB( ArrayND<double>& RHS_EB );
+    void RK_step( const ArrayND<double>& RHS_EB, const double a_1 );
 
     void print_vti();
     void write_vti_header( std::string file_name, long& N_bytes_scalar, long& N_bytes_vector );
