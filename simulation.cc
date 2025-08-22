@@ -47,20 +47,16 @@ void simulation::setup()
   set_ghost_cells(E);
   set_ghost_cells(B);
 
-  // // testing: check ghost vales
-  // for( size_t iy = BD; iy < N_bd[1] - BD; iy++ ){
+  // testing: check ghost edges
+  for( size_t ix = 0; ix < BD; ix++ ){
+  for( size_t iy = 0; iy < BD; iy++ ){
 
-  //   E(0,BD  ,iy) = E(0,BD-1,iy);
-  //   E(0,BD+1,iy) = E(0,BD-2,iy);
-  //   E(0,N_bd[0]-3,iy) = E(0,N_bd[0]-1,iy);
-  //   E(0,N_bd[0]-4,iy) = E(0,N_bd[0]-2,iy);
-
-  //   B(0,BD  ,iy) = B(0,BD-1,iy);
-  //   B(0,BD+1,iy) = B(0,BD-2,iy);
-  //   B(0,N_bd[0]-3,iy) = B(0,N_bd[0]-1,iy);
-  //   B(0,N_bd[0]-4,iy) = B(0,N_bd[0]-2,iy);
-
-  // }
+    E(0, ix+BD   ,iy+BD  ) = E(0,ix        ,iy        );
+    E(0, ix+N[0] ,iy+BD  ) = E(0,ix+N[0]+BD,iy        );
+    E(0, ix+BD   ,iy+N[1]) = E(0,ix        ,iy+N[1]+BD);
+    E(0, ix+N[0] ,iy+N[1]) = E(0,ix+N[0]+BD,iy+N[1]+BD);
+    
+  }}
 
 }
 
@@ -100,6 +96,22 @@ void simulation::set_ghost_cells( ArrayND<double>& field )
     // N -> S
     MPI_Sendrecv( buffer.data(), 1, mpi_slice_inner_N, mpi_neighbors[3], 123,
                   buffer.data(), 1, mpi_slice_outer_S, mpi_neighbors[2], 123, cart_comm, MPI_STATUS_IGNORE);
+
+    // SW -> NE
+    MPI_Sendrecv( buffer.data(), 1, mpi_edge_inner_SW, mpi_neighbors[6], 123,
+                  buffer.data(), 1, mpi_edge_outer_NE, mpi_neighbors[5], 123, cart_comm, MPI_STATUS_IGNORE);
+
+    // NE -> SW
+    MPI_Sendrecv( buffer.data(), 1, mpi_edge_inner_NE, mpi_neighbors[5], 123,
+                  buffer.data(), 1, mpi_edge_outer_SW, mpi_neighbors[6], 123, cart_comm, MPI_STATUS_IGNORE);
+
+    // SE -> NW
+    MPI_Sendrecv( buffer.data(), 1, mpi_edge_inner_SE, mpi_neighbors[7], 123,
+                  buffer.data(), 1, mpi_edge_outer_NW, mpi_neighbors[4], 123, cart_comm, MPI_STATUS_IGNORE);
+
+    // NW -> SE
+    MPI_Sendrecv( buffer.data(), 1, mpi_edge_inner_NW, mpi_neighbors[4], 123,
+                  buffer.data(), 1, mpi_edge_outer_SE, mpi_neighbors[7], 123, cart_comm, MPI_STATUS_IGNORE);
 
     // get updated field components from buffer
     for( size_t ix = 0; ix < N_bd[0]; ix++ ){
