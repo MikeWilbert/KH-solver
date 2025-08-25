@@ -16,9 +16,13 @@ num_outputs(0)
   E.resize({3, N_bd[0], N_bd[1]});
   B.resize({3, N_bd[0], N_bd[1]});
 
-  RHS_EB       .resize({6, N[0]   , N[1]   });
-  num_flux_EB_x.resize({6, N[0]+1 , N[1]  });
-  num_flux_EB_y.resize({6, N[0]   , N[1]+1});
+  B_1.resize({3, N_bd[0], N_bd[1]});
+  E_1.resize({3, N_bd[0], N_bd[1]});
+
+  RHS_BE_0     .resize({6, N[0]   , N[1]   });
+  RHS_BE_1     .resize({6, N[0]   , N[1]   });
+  num_flux_BE_x.resize({6, N[0]+1 , N[1]  });
+  num_flux_BE_y.resize({6, N[0]   , N[1]+1});
 
   setup();
 
@@ -30,7 +34,7 @@ void simulation::setup()
 {
   time = 0.;
 
-  L = 2.;
+  L = 2.*M_PI;
   dx = L / N_tot;
   dx_inv = 1./dx;
 
@@ -43,13 +47,13 @@ void simulation::setup()
     double y_val = ( iy - BD + 0.5 ) * dx + mpi_coords[1] * N_tot / mpi_dims[1] * dx;
 
     // mono chromatic wave
-    E(0,ix,iy) = cos( k * 2.*M_PI/L * y_val );
-    E(1,ix,iy) = 0.;
+    E(0,ix,iy) = 0.;
+    E(1,ix,iy) = sin(k * x_val);  // Ey
     E(2,ix,iy) = 0.;
 
     B(0,ix,iy) = 0.;
     B(1,ix,iy) = 0.;
-    B(2,ix,iy) = sin( k * 2.*M_PI/L * y_val );
+    B(2,ix,iy) = sin(k * x_val);  // Bz
 
   }}
 
@@ -62,7 +66,7 @@ void simulation::run( const double run_time )
 {
 
   double out_time = 0.;
-  double out_interval = 0.02;
+  double out_interval = 0.2;
 
   do
   {
@@ -97,7 +101,7 @@ void simulation::get_dt()
 
 }
 
-void simulation::get_RHS_EB( ArrayND<double>& RHS )
+void simulation::get_RHS_BE( ArrayND<double>& RHS, const ArrayND<double>& E_, const ArrayND<double>& B_ )
 {
 
   ArrayND<double> Ez_tilde( { N[0]+1, N[1]+1 } );
@@ -122,27 +126,33 @@ void simulation::get_RHS_EB( ArrayND<double>& RHS )
       for( size_t i = 0; i < 3; i++ )
       {
 
-      E_SW[i] = E( i, jx-1, jy-1 );
-      E_SE[i] = E( i, jx  , jy-1 );
-      E_NW[i] = E( i, jx-1, jy   );
-      E_NE[i] = E( i, jx  , jy   );
+        E_SW[i] = E_( i, jx-1, jy-1 );
+        E_SE[i] = E_( i, jx  , jy-1 );
+        E_NW[i] = E_( i, jx-1, jy   );
+        E_NE[i] = E_( i, jx  , jy   );
 
-      B_SW[i] = B( i, jx-1, jy-1 );
-      B_SE[i] = B( i, jx  , jy-1 );
-      B_NW[i] = B( i, jx-1, jy   );
-      B_NE[i] = B( i, jx  , jy   );
-
-      Ez_tilde( ix,iy ) = 0.25 * ( (E_SW[2] + E_SE[2]   +   E_NE[2] + E_NW[2])
-                                + ( B_SE[1] + B_NE[1] ) - ( B_SW[1] + B_NW[1] )   
-                                - ( B_NW[0] + B_NE[0] ) - ( B_SW[0] + B_SE[0] )   
-                                 );
-
-      Bz_tilde( ix,iy ) = 0.25 * ( (B_SW[2] + B_SE[2]   +   B_NE[2] + B_NW[2])
-                                + ( E_SE[1] + E_NE[1] ) - ( E_SW[1] + E_NW[1] )   
-                                - ( E_NW[0] + E_NE[0] ) - ( E_SW[0] + E_SE[0] )   
-                                 );
+        B_SW[i] = B_( i, jx-1, jy-1 );
+        B_SE[i] = B_( i, jx  , jy-1 );
+        B_NW[i] = B_( i, jx-1, jy   );
+        B_NE[i] = B_( i, jx  , jy   );
 
       }
+
+      double Ez_avg = 0.25 * ( E_SW[2] + E_SE[2] + E_NE[2] + E_NW[2] );
+      double Bz_avg = 0.25 * ( B_SW[2] + B_SE[2] + B_NE[2] + B_NW[2] );
+
+      double Bx_top = 0.5 * ( B_NW[0] + B_NE[0] );
+      double Bx_bot = 0.5 * ( B_SW[0] + B_SE[0] );
+      double By_lft = 0.5 * ( B_SW[1] + B_NW[1] );
+      double By_rgt = 0.5 * ( B_SE[1] + B_NE[1] );
+
+      double Ex_top = 0.5 * ( E_NW[0] + E_NE[0] );
+      double Ex_bot = 0.5 * ( E_SW[0] + E_SE[0] );
+      double Ey_lft = 0.5 * ( E_SW[1] + E_NW[1] );
+      double Ey_rgt = 0.5 * ( E_SE[1] + E_NE[1] );
+
+      Ez_tilde( ix,iy ) = Ez_avg + 0.5 * ( By_rgt - By_lft ) - 0.5 * ( Bx_top - Bx_bot ); 
+      Bz_tilde( ix,iy ) = Bz_avg + 0.5 * ( Ey_rgt - Ey_lft ) - 0.5 * ( Ex_top - Ex_bot ); 
 
   }}
 
@@ -153,23 +163,23 @@ void simulation::get_RHS_EB( ArrayND<double>& RHS )
     size_t jx = ix+BD;
     size_t jy = iy+BD;
 
-    double Ey_mns = E( 1, jx, jy-1 );
-    double Ey_pls = E( 1, jx, jy   );
-    double Ez_mns = E( 2, jx, jy-1 );
-    double Ez_pls = E( 2, jx, jy   );
+    double Ey_mns = E_( 1, jx-1, jy );
+    double Ey_pls = E_( 1, jx  , jy );
+    double Ez_mns = E_( 2, jx-1, jy );
+    double Ez_pls = E_( 2, jx  , jy );
 
-    double By_mns = B( 1, jx, jy-1 );
-    double By_pls = B( 1, jx, jy   );
-    double Bz_mns = B( 2, jx, jy-1 );
-    double Bz_pls = B( 2, jx, jy   );
+    double By_mns = B_( 1, jx-1, jy );
+    double By_pls = B_( 1, jx  , jy );
+    double Bz_mns = B_( 2, jx-1, jy );
+    double Bz_pls = B_( 2, jx  , jy );
 
-    num_flux_EB_x( 0, ix, iy ) =   0.;
-    num_flux_EB_x( 1, ix, iy ) = + 0.5 * ( Bz_tilde( ix, iy+1 ) + Bz_tilde( ix, iy ) );
-    num_flux_EB_x( 2, ix, iy ) = - 0.5 * ( By_pls + By_mns ) - 0.5 * ( Ez_pls - Ez_mns );
+    num_flux_BE_x( 0, ix, iy ) =   0.;
+    num_flux_BE_x( 1, ix, iy ) = - 0.5 * ( Ez_tilde( ix, iy+1 ) + Ez_tilde( ix, iy ) );
+    num_flux_BE_x( 2, ix, iy ) = + 0.5 * ( Ey_pls + Ey_mns ) - 0.5 * ( Bz_pls - Bz_mns );
 
-    num_flux_EB_x( 3, ix, iy ) =   0.;
-    num_flux_EB_x( 4, ix, iy ) = - 0.5 * ( Ez_tilde( ix, iy+1 ) + Ez_tilde( ix, iy ) );
-    num_flux_EB_x( 5, ix, iy ) = + 0.5 * ( Ey_pls + Ey_mns ) - 0.5 * ( Bz_pls - Bz_mns );
+    num_flux_BE_x( 3, ix, iy ) =   0.;
+    num_flux_BE_x( 4, ix, iy ) = + 0.5 * ( Bz_tilde( ix, iy+1 ) + Bz_tilde( ix, iy ) );
+    num_flux_BE_x( 5, ix, iy ) = - 0.5 * ( By_pls + By_mns ) - 0.5 * ( Ez_pls - Ez_mns );
 
   }}
 
@@ -179,23 +189,23 @@ void simulation::get_RHS_EB( ArrayND<double>& RHS )
     size_t jx = ix+BD;
     size_t jy = iy+BD;
 
-    double Ex_mns = E( 0, jx-1, jy );
-    double Ex_pls = E( 0, jx  , jy );
-    double Ez_mns = E( 2, jx-1, jy );
-    double Ez_pls = E( 2, jx  , jy );
+    double Ex_mns = E( 0, jx, jy-1 );
+    double Ex_pls = E( 0, jx, jy   );
+    double Ez_mns = E( 2, jx, jy-1 );
+    double Ez_pls = E( 2, jx, jy   );
 
-    double Bx_mns = B( 0, jx-1, jy );
-    double Bx_pls = B( 0, jx  , jy );
-    double Bz_mns = B( 2, jx-1, jy );
-    double Bz_pls = B( 2, jx  , jy );
+    double Bx_mns = B( 0, jx, jy-1 );
+    double Bx_pls = B( 0, jx, jy   );
+    double Bz_mns = B( 2, jx, jy-1 );
+    double Bz_pls = B( 2, jx, jy   );
 
-    num_flux_EB_y( 0, ix, iy ) = - 0.5 * ( Bz_tilde( ix+1, iy ) + Bz_tilde( ix, iy ) );
-    num_flux_EB_y( 1, ix, iy ) =   0.;
-    num_flux_EB_y( 2, ix, iy ) = + 0.5 * ( Bx_pls + Bx_mns ) - 0.5 * ( Ez_pls - Ez_mns );
+    num_flux_BE_y( 0, ix, iy ) = + 0.5 * ( Ez_tilde( ix+1, iy ) + Ez_tilde( ix, iy ) );
+    num_flux_BE_y( 1, ix, iy ) =   0.;
+    num_flux_BE_y( 2, ix, iy ) = - 0.5 * ( Ex_pls + Ex_mns ) - 0.5 * ( Bz_pls - Bz_mns );
 
-    num_flux_EB_y( 3, ix, iy ) = + 0.5 * ( Ez_tilde( ix+1, iy ) + Ez_tilde( ix, iy ) );
-    num_flux_EB_y( 4, ix, iy ) =   0.;
-    num_flux_EB_y( 5, ix, iy ) = - 0.5 * ( Ex_pls + Ex_mns ) - 0.5 * ( Bz_pls - Bz_mns );
+    num_flux_BE_y( 3, ix, iy ) = - 0.5 * ( Bz_tilde( ix+1, iy ) + Bz_tilde( ix, iy ) );
+    num_flux_BE_y( 4, ix, iy ) =   0.;
+    num_flux_BE_y( 5, ix, iy ) = + 0.5 * ( Bx_pls + Bx_mns ) - 0.5 * ( Ez_pls - Ez_mns );
 
   }}
 
@@ -205,8 +215,8 @@ void simulation::get_RHS_EB( ArrayND<double>& RHS )
     for( size_t ix = 0; ix < N[0]; ix++ ){
     for( size_t iy = 0; iy < N[1]; iy++ ){
 
-      RHS( i, ix, iy ) = - ( num_flux_EB_x( i, ix+1, iy   ) - num_flux_EB_x( i, ix, iy ) ) * dx_inv
-                         - ( num_flux_EB_y( i, ix  , iy+1 ) - num_flux_EB_y( i, ix, iy ) ) * dx_inv;
+      RHS( i, ix, iy ) = - ( num_flux_BE_x( i, ix+1, iy   ) - num_flux_BE_x( i, ix, iy ) ) * dx_inv;
+                        //  - ( num_flux_BE_y( i, ix  , iy+1 ) - num_flux_BE_y( i, ix, iy ) ) * dx_inv;
 
     }}
 
@@ -214,7 +224,9 @@ void simulation::get_RHS_EB( ArrayND<double>& RHS )
 
 }
 
-void simulation::RK_step( const ArrayND<double>& RHS_EB, const double a_1 )
+void simulation::RK_step( ArrayND<double>& E_, ArrayND<double>& B_, 
+                          const ArrayND<double>& RHS_EB_1_, const ArrayND<double>& RHS_EB_2_, 
+                          const double a_1, const double a_2 )
 {
 
   for( size_t ix = 0; ix < N[0]; ix++ ){
@@ -223,18 +235,18 @@ void simulation::RK_step( const ArrayND<double>& RHS_EB, const double a_1 )
     size_t jx = ix+BD;
     size_t jy = iy+BD;
 
-    E(0, jx, jy) = E(0, jx, jy) + a_1 * dt * RHS_EB( 0, ix, iy );
-    E(1, jx, jy) = E(1, jx, jy) + a_1 * dt * RHS_EB( 1, ix, iy );
-    E(2, jx, jy) = E(2, jx, jy) + a_1 * dt * RHS_EB( 2, ix, iy );
+    B_(0, jx, jy) = B(0, jx, jy) + a_1 * dt * RHS_EB_1_( 0, ix, iy ) + a_2 * dt * RHS_EB_2_( 0, ix, iy );
+    B_(1, jx, jy) = B(1, jx, jy) + a_1 * dt * RHS_EB_1_( 1, ix, iy ) + a_2 * dt * RHS_EB_2_( 1, ix, iy );
+    B_(2, jx, jy) = B(2, jx, jy) + a_1 * dt * RHS_EB_1_( 2, ix, iy ) + a_2 * dt * RHS_EB_2_( 2, ix, iy );
 
-    B(0, jx, jy) = B(0, jx, jy) + a_1 * dt * RHS_EB( 3, ix, iy );
-    B(1, jx, jy) = B(1, jx, jy) + a_1 * dt * RHS_EB( 4, ix, iy );
-    B(2, jx, jy) = B(2, jx, jy) + a_1 * dt * RHS_EB( 5, ix, iy );
+    E_(0, jx, jy) = E(0, jx, jy) + a_1 * dt * RHS_EB_1_( 3, ix, iy ) + a_2 * dt * RHS_EB_2_( 3, ix, iy );
+    E_(1, jx, jy) = E(1, jx, jy) + a_1 * dt * RHS_EB_1_( 4, ix, iy ) + a_2 * dt * RHS_EB_2_( 4, ix, iy );
+    E_(2, jx, jy) = E(2, jx, jy) + a_1 * dt * RHS_EB_1_( 5, ix, iy ) + a_2 * dt * RHS_EB_2_( 5, ix, iy );
 
   }}
 
-  set_ghost_cells(E);
-  set_ghost_cells(B);
+  set_ghost_cells(E_);
+  set_ghost_cells(B_);
 
 }
 
@@ -243,8 +255,11 @@ void simulation::step()
 
   get_dt();
 
-  get_RHS_EB( RHS_EB );
-  RK_step   ( RHS_EB, 1. );
+  get_RHS_BE( RHS_BE_0, E  , B   );
+  RK_step   ( E_1, B_1, RHS_BE_0, RHS_BE_1, 1. , 0.  );
+
+  get_RHS_BE( RHS_BE_1, E_1, B_1 );
+  RK_step   ( E  , B  , RHS_BE_0, RHS_BE_1, 0.5, 0.5 );
 
 }
 
@@ -253,63 +268,44 @@ void simulation::set_ghost_cells( ArrayND<double>& field )
 
   size_t num_fields = field.dim_size( 0 );
 
-  std::vector<double> buffer( N_bd[0]*N_bd[1] );
-
   // exchange ghost cells for each component
   for( size_t i = 0; i < num_fields; i++ )
   {
 
-    // fill buffer for field component
-    for( size_t ix = 0; ix < N_bd[0]; ix++ ){
-    for( size_t iy = 0; iy < N_bd[1]; iy++ ){
-
-      size_t id = ix * N_bd[1] + iy;
-
-      buffer[id] = field(i,ix,iy);
-
-    }}
+    double* base = &field( i, 0, 0 );
+    int tag = 123;
 
     // W -> E
-    MPI_Sendrecv( buffer.data(), 1, mpi_slice_inner_W, mpi_neighbors[0], 123,
-                  buffer.data(), 1, mpi_slice_outer_E, mpi_neighbors[1], 123, cart_comm, MPI_STATUS_IGNORE);
+    MPI_Sendrecv( base, 1, mpi_slice_inner_W, mpi_neighbors[0], tag,
+                  base, 1, mpi_slice_outer_E, mpi_neighbors[1], tag, cart_comm, MPI_STATUS_IGNORE);
 
     // E -> W
-    MPI_Sendrecv( buffer.data(), 1, mpi_slice_inner_E, mpi_neighbors[1], 123,
-                  buffer.data(), 1, mpi_slice_outer_W, mpi_neighbors[0], 123, cart_comm, MPI_STATUS_IGNORE);
+    MPI_Sendrecv( base, 1, mpi_slice_inner_E, mpi_neighbors[1], tag,
+                  base, 1, mpi_slice_outer_W, mpi_neighbors[0], tag, cart_comm, MPI_STATUS_IGNORE);
 
     // S -> N
-    MPI_Sendrecv( buffer.data(), 1, mpi_slice_inner_S, mpi_neighbors[2], 123,
-                  buffer.data(), 1, mpi_slice_outer_N, mpi_neighbors[3], 123, cart_comm, MPI_STATUS_IGNORE);
+    MPI_Sendrecv( base, 1, mpi_slice_inner_S, mpi_neighbors[2], tag,
+                  base, 1, mpi_slice_outer_N, mpi_neighbors[3], tag, cart_comm, MPI_STATUS_IGNORE);
 
     // N -> S
-    MPI_Sendrecv( buffer.data(), 1, mpi_slice_inner_N, mpi_neighbors[3], 123,
-                  buffer.data(), 1, mpi_slice_outer_S, mpi_neighbors[2], 123, cart_comm, MPI_STATUS_IGNORE);
+    MPI_Sendrecv( base, 1, mpi_slice_inner_N, mpi_neighbors[3], tag,
+                  base, 1, mpi_slice_outer_S, mpi_neighbors[2], tag, cart_comm, MPI_STATUS_IGNORE);
 
     // SW -> NE
-    MPI_Sendrecv( buffer.data(), 1, mpi_edge_inner_SW, mpi_neighbors[6], 123,
-                  buffer.data(), 1, mpi_edge_outer_NE, mpi_neighbors[5], 123, cart_comm, MPI_STATUS_IGNORE);
+    MPI_Sendrecv( base, 1, mpi_edge_inner_SW, mpi_neighbors[6], tag,
+                  base, 1, mpi_edge_outer_NE, mpi_neighbors[5], tag, cart_comm, MPI_STATUS_IGNORE);
 
     // NE -> SW
-    MPI_Sendrecv( buffer.data(), 1, mpi_edge_inner_NE, mpi_neighbors[5], 123,
-                  buffer.data(), 1, mpi_edge_outer_SW, mpi_neighbors[6], 123, cart_comm, MPI_STATUS_IGNORE);
+    MPI_Sendrecv( base, 1, mpi_edge_inner_NE, mpi_neighbors[5], tag,
+                  base, 1, mpi_edge_outer_SW, mpi_neighbors[6], tag, cart_comm, MPI_STATUS_IGNORE);
 
     // SE -> NW
-    MPI_Sendrecv( buffer.data(), 1, mpi_edge_inner_SE, mpi_neighbors[7], 123,
-                  buffer.data(), 1, mpi_edge_outer_NW, mpi_neighbors[4], 123, cart_comm, MPI_STATUS_IGNORE);
+    MPI_Sendrecv( base, 1, mpi_edge_inner_SE, mpi_neighbors[7], tag,
+                  base, 1, mpi_edge_outer_NW, mpi_neighbors[4], tag, cart_comm, MPI_STATUS_IGNORE);
 
     // NW -> SE
-    MPI_Sendrecv( buffer.data(), 1, mpi_edge_inner_NW, mpi_neighbors[4], 123,
-                  buffer.data(), 1, mpi_edge_outer_SE, mpi_neighbors[7], 123, cart_comm, MPI_STATUS_IGNORE);
-
-    // get updated field components from buffer
-    for( size_t ix = 0; ix < N_bd[0]; ix++ ){
-    for( size_t iy = 0; iy < N_bd[1]; iy++ ){
-
-      size_t id = ix * N_bd[1] + iy;
-
-      field(i,ix,iy) = buffer[id];
-
-    }}
+    MPI_Sendrecv( base, 1, mpi_edge_inner_NW, mpi_neighbors[4], tag,
+                  base, 1, mpi_edge_outer_SE, mpi_neighbors[7], tag, cart_comm, MPI_STATUS_IGNORE);
 
   }
 

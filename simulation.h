@@ -61,17 +61,23 @@ class simulation
     ArrayND<double> E;
     ArrayND<double> B;
 
-    ArrayND<double> RHS_EB;
-    ArrayND<double> num_flux_EB_x;
-    ArrayND<double> num_flux_EB_y;
+    ArrayND<double> E_1;
+    ArrayND<double> B_1;
+    ArrayND<double> RHS_BE_0;
+    ArrayND<double> RHS_BE_1;
+
+    ArrayND<double> num_flux_BE_x;
+    ArrayND<double> num_flux_BE_y;
 
     void init_mpi();
     void setup();
     void set_ghost_cells( ArrayND<double>& field );
     void step();
     void get_dt();
-    void get_RHS_EB( ArrayND<double>& RHS_EB );
-    void RK_step( const ArrayND<double>& RHS_EB, const double a_1 );
+    void get_RHS_BE( ArrayND<double>& RHS, const ArrayND<double>& E_, const ArrayND<double>& B_ );
+    void RK_step( ArrayND<double>& E_, ArrayND<double>& B_, 
+                          const ArrayND<double>& RHS_EB_1_, const ArrayND<double>& RHS_EB_2_, 
+                          const double a_1, const double a_2 );
 
     void print_vti();
     void write_vti_header( std::string file_name, long& N_bytes_scalar, long& N_bytes_vector );
