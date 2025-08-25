@@ -34,19 +34,22 @@ void simulation::setup()
   dx = L / N_tot;
   dx_inv = 1./dx;
 
+  int k = 2;
+
   for( size_t ix = start_i[0]; ix < end_i[0]; ix++ ){
   for( size_t iy = start_i[1]; iy < end_i[1]; iy++ ){
 
     double x_val = ( ix - BD + 0.5 ) * dx + mpi_coords[0] * N_tot / mpi_dims[0] * dx;
     double y_val = ( iy - BD + 0.5 ) * dx + mpi_coords[1] * N_tot / mpi_dims[1] * dx;
 
-    E(0,ix,iy) = mpi_rank;
-    E(1,ix,iy) = mpi_coords[0];
-    E(2,ix,iy) = mpi_coords[1];
+    // mono chromatic wave
+    E(0,ix,iy) = cos( k * 2.*M_PI/L * y_val );
+    E(1,ix,iy) = 0.;
+    E(2,ix,iy) = 0.;
 
-    B(0,ix,iy) = sin( (2.*M_PI/L) * x_val );
-    B(1,ix,iy) = cos( (2.*M_PI/L) * y_val );
-    B(2,ix,iy) = sin( (2.*M_PI/L) * x_val ) * cos( (2.*M_PI/L) * y_val );
+    B(0,ix,iy) = 0.;
+    B(1,ix,iy) = 0.;
+    B(2,ix,iy) = sin( k * 2.*M_PI/L * y_val );
 
   }}
 
@@ -97,32 +100,104 @@ void simulation::get_dt()
 void simulation::get_RHS_EB( ArrayND<double>& RHS )
 {
 
-  for( size_t i = 0; i < 3; i++  )
-  {
+  ArrayND<double> Ez_tilde( { N[0]+1, N[1]+1 } );
+  ArrayND<double> Bz_tilde( { N[0]+1, N[1]+1 } );
 
-    for( size_t ix = 0; ix < N[0]+1; ix++ ){
-    for( size_t iy = 0; iy < N[1]  ; iy++ ){
+  double E_SW[3];
+  double E_SE[3];
+  double E_NW[3];
+  double E_NE[3];
+
+  double B_SW[3];
+  double B_SE[3];
+  double B_NW[3];
+  double B_NE[3];
+
+  for( size_t ix = 0; ix < N[0]+1; ix++ ){
+  for( size_t iy = 0; iy < N[1]+1; iy++ ){
 
       size_t jx = ix+BD;
       size_t jy = iy+BD;
 
-      num_flux_EB_x( i  , ix, iy ) = 0.5 * ( E( i, jx, jy ) + E( i, jx-1, jy   ) ) - 0.5 * dx / dt * ( E( i, jx, jy   ) - E( i, jx-1, jy   ) );
-      num_flux_EB_x( i+3, ix, iy ) = 0.5 * ( B( i, jx, jy ) + B( i, jx-1, jy   ) ) - 0.5 * dx / dt * ( B( i, jx, jy   ) - B( i, jx-1, jy   ) );
+      for( size_t i = 0; i < 3; i++ )
+      {
 
-    }}
+      E_SW[i] = E( i, jx-1, jy-1 );
+      E_SE[i] = E( i, jx  , jy-1 );
+      E_NW[i] = E( i, jx-1, jy   );
+      E_NE[i] = E( i, jx  , jy   );
 
-    for( size_t ix = 0; ix < N[0]  ; ix++ ){
-    for( size_t iy = 0; iy < N[1]+1; iy++ ){
+      B_SW[i] = B( i, jx-1, jy-1 );
+      B_SE[i] = B( i, jx  , jy-1 );
+      B_NW[i] = B( i, jx-1, jy   );
+      B_NE[i] = B( i, jx  , jy   );
 
-      size_t jx = ix+BD;
-      size_t jy = iy+BD;
+      Ez_tilde( ix,iy ) = 0.25 * ( (E_SW[2] + E_SE[2]   +   E_NE[2] + E_NW[2])
+                                + ( B_SE[1] + B_NE[1] ) - ( B_SW[1] + B_NW[1] )   
+                                - ( B_NW[0] + B_NE[0] ) - ( B_SW[0] + B_SE[0] )   
+                                 );
 
-      num_flux_EB_y( i  , ix, iy ) = 0.5 * ( E( i, jx, jy ) + E( i, jx  , jy-1 ) ) - 0.5 * dx / dt * ( E( i, jx, jy   ) - E( i, jx  , jy-1 ) );
-      num_flux_EB_y( i+3, ix, iy ) = 0.5 * ( B( i, jx, jy ) + B( i, jx  , jy-1 ) ) - 0.5 * dx / dt * ( B( i, jx, jy   ) - B( i, jx  , jy-1 ) );
+      Bz_tilde( ix,iy ) = 0.25 * ( (B_SW[2] + B_SE[2]   +   B_NE[2] + B_NW[2])
+                                + ( E_SE[1] + E_NE[1] ) - ( E_SW[1] + E_NW[1] )   
+                                - ( E_NW[0] + E_NE[0] ) - ( E_SW[0] + E_SE[0] )   
+                                 );
 
-    }}
+      }
 
-  }
+  }}
+
+
+  for( size_t ix = 0; ix < N[0]+1; ix++ ){
+  for( size_t iy = 0; iy < N[1]  ; iy++ ){
+
+    size_t jx = ix+BD;
+    size_t jy = iy+BD;
+
+    double Ey_mns = E( 1, jx, jy-1 );
+    double Ey_pls = E( 1, jx, jy   );
+    double Ez_mns = E( 2, jx, jy-1 );
+    double Ez_pls = E( 2, jx, jy   );
+
+    double By_mns = B( 1, jx, jy-1 );
+    double By_pls = B( 1, jx, jy   );
+    double Bz_mns = B( 2, jx, jy-1 );
+    double Bz_pls = B( 2, jx, jy   );
+
+    num_flux_EB_x( 0, ix, iy ) =   0.;
+    num_flux_EB_x( 1, ix, iy ) = + 0.5 * ( Bz_tilde( ix, iy+1 ) + Bz_tilde( ix, iy ) );
+    num_flux_EB_x( 2, ix, iy ) = - 0.5 * ( By_pls + By_mns ) - 0.5 * ( Ez_pls - Ez_mns );
+
+    num_flux_EB_x( 3, ix, iy ) =   0.;
+    num_flux_EB_x( 4, ix, iy ) = - 0.5 * ( Ez_tilde( ix, iy+1 ) + Ez_tilde( ix, iy ) );
+    num_flux_EB_x( 5, ix, iy ) = + 0.5 * ( Ey_pls + Ey_mns ) - 0.5 * ( Bz_pls - Bz_mns );
+
+  }}
+
+  for( size_t ix = 0; ix < N[0]  ; ix++ ){
+  for( size_t iy = 0; iy < N[1]+1; iy++ ){
+
+    size_t jx = ix+BD;
+    size_t jy = iy+BD;
+
+    double Ex_mns = E( 0, jx-1, jy );
+    double Ex_pls = E( 0, jx  , jy );
+    double Ez_mns = E( 2, jx-1, jy );
+    double Ez_pls = E( 2, jx  , jy );
+
+    double Bx_mns = B( 0, jx-1, jy );
+    double Bx_pls = B( 0, jx  , jy );
+    double Bz_mns = B( 2, jx-1, jy );
+    double Bz_pls = B( 2, jx  , jy );
+
+    num_flux_EB_y( 0, ix, iy ) = - 0.5 * ( Bz_tilde( ix+1, iy ) + Bz_tilde( ix, iy ) );
+    num_flux_EB_y( 1, ix, iy ) =   0.;
+    num_flux_EB_y( 2, ix, iy ) = + 0.5 * ( Bx_pls + Bx_mns ) - 0.5 * ( Ez_pls - Ez_mns );
+
+    num_flux_EB_y( 3, ix, iy ) = + 0.5 * ( Ez_tilde( ix+1, iy ) + Ez_tilde( ix, iy ) );
+    num_flux_EB_y( 4, ix, iy ) =   0.;
+    num_flux_EB_y( 5, ix, iy ) = - 0.5 * ( Ex_pls + Ex_mns ) - 0.5 * ( Bz_pls - Bz_mns );
+
+  }}
 
   for( size_t i = 0; i < 6; i++  )
   {
