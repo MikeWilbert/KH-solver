@@ -12,6 +12,7 @@ num_outputs(0)
 
   E     .resize({3, N_bd[0], N_bd[1]});
   B     .resize({3, N_bd[0], N_bd[1]});
+  prim_e.resize({5, N_bd[0], N_bd[1]});
   cons_e.resize({5, N_bd[0], N_bd[1]});
 
   B_1.resize({3, N_bd[0], N_bd[1]});
@@ -36,7 +37,7 @@ void simulation::setup()
   dx = L / N_tot;
   dx_inv = 1./dx;
 
-  int kx = 2;
+  int kx = 1;
   int ky = 3;
 
   double Gamma = 1.4;
@@ -59,17 +60,7 @@ void simulation::setup()
     B(2,ix,iy) = sin( 2.*M_PI / L * (kx * x_val + ky * y_val) );  // Bz
 
     // classical Kelvin-Helmholtz
-    if( y_val > 0.75 * L || y_val < 0.25 * L )
-    {
-
-      rho = 1.;
-      vx  = -0.5;
-      vy  = 0.01 * sin( 2.*M_PI/L * x_val );
-      vz  = 0.;
-      p   = 2.5;
-
-    }
-    else
+    if( y_val > 0.75 * L || y_val < 0.25 * L ) // outside
     {
 
       rho = 1.;
@@ -79,6 +70,22 @@ void simulation::setup()
       p   = 2.5;
 
     }
+    else // inside
+    {
+
+      rho = 2.;
+      vx  = -0.5;
+      vy  = 0.01 * sin( 2.*M_PI/L * x_val );
+      vz  = 0.;
+      p   = 2.5;
+
+    }
+
+    prim_e( 0, ix, iy ) = rho;
+    prim_e( 1, ix, iy ) = vx;
+    prim_e( 2, ix, iy ) = vy;
+    prim_e( 3, ix, iy ) = vz;
+    prim_e( 4, ix, iy ) = p;
 
     cons_e( 0, ix, iy ) = rho;
     cons_e( 1, ix, iy ) = rho * vx;
@@ -90,7 +97,7 @@ void simulation::setup()
 
   set_ghost_cells(E);
   set_ghost_cells(B);
-  set_ghost_cells(cons_e);
+  set_ghost_cells(prim_e);
 
 }
 
@@ -243,7 +250,7 @@ void simulation::get_RHS_BE( ArrayND<double>& RHS, const ArrayND<double>& E_, co
     for( size_t ix = 0; ix < N[0]; ix++ ){
     for( size_t iy = 0; iy < N[1]; iy++ ){
 
-      RHS( i, ix, iy ) = - ( num_flux_BE_x( i, ix+1, iy   ) - num_flux_BE_x( i, ix, iy ) ) * dx_inv;
+      RHS( i, ix, iy ) = - ( num_flux_BE_x( i, ix+1, iy   ) - num_flux_BE_x( i, ix, iy ) ) * dx_inv
                          - ( num_flux_BE_y( i, ix  , iy+1 ) - num_flux_BE_y( i, ix, iy ) ) * dx_inv;
 
     }}
@@ -350,7 +357,9 @@ void simulation::print_vti()
 
   print_mpi_vector( file_name, N_bytes_vector, E     , 0 );
   print_mpi_vector( file_name, N_bytes_vector, B     , 0 );
-  print_mpi_vector( file_name, N_bytes_vector, cons_e, 1 );
+  print_mpi_vector( file_name, N_bytes_vector, prim_e, 1 );
+  print_mpi_scalar( file_name, N_bytes_scalar, prim_e, 0 );
+  print_mpi_scalar( file_name, N_bytes_scalar, prim_e, 4 );
 
   write_vti_footer( file_name );
 
@@ -376,15 +385,15 @@ void simulation::print_mpi_vector( std::string file_name, long& N_bytes_vector, 
   MPI_File_get_position(mpi_file, &mpi_eof);
   MPI_Barrier(cart_comm);
   
-  for( size_t ix = BD; ix < N_bd[0] - BD; ix++ ){
   for( size_t iy = BD; iy < N_bd[1] - BD; iy++ ){
-    
-    // size_t id = (ix-BD) * N[1] + (iy-BD);
+  for( size_t ix = BD; ix < N_bd[0] - BD; ix++ ){
+  
     size_t id = (iy-BD) * N[0] + (ix-BD);
     
     float_array_vector[3*id+0] = float( field(0+comp,ix,iy) );
     float_array_vector[3*id+1] = float( field(1+comp,ix,iy) );
     float_array_vector[3*id+2] = float( field(2+comp,ix,iy) ); 
+
   }}
   
   // write data
@@ -404,31 +413,30 @@ void simulation::print_mpi_scalar( std::string file_name, long& N_bytes_scalar, 
     binary_os.close();
   }MPI_Barrier(cart_comm);
   
-  // // open file
-  // MPI_File mpi_file;
-  // MPI_File_open(cart_comm, file_name.c_str(), MPI_MODE_APPEND|MPI_MODE_WRONLY, MPI_INFO_NULL, &mpi_file);
+  // open file
+  MPI_File mpi_file;
+  MPI_File_open(cart_comm, file_name.c_str(), MPI_MODE_APPEND|MPI_MODE_WRONLY, MPI_INFO_NULL, &mpi_file);
   
-  // // offset to end of file
-  // MPI_Offset mpi_eof;
-  // MPI_File_get_position(mpi_file, &mpi_eof);
-  // MPI_Barrier(cart_comm);
+  // offset to end of file
+  MPI_Offset mpi_eof;
+  MPI_File_get_position(mpi_file, &mpi_eof);
+  MPI_Barrier(cart_comm);
   
-  // for( size_t ix = BD; ix < N_bd[0] - BD; ix++ ){
-  // for( size_t iy = BD; iy < N_bd[1] - BD; iy++ ){
+  for( size_t iy = BD; iy < N_bd[1] - BD; iy++ ){
+  for( size_t ix = BD; ix < N_bd[0] - BD; ix++ ){
     
-  //   size_t id = (ix-BD) * N[1] + (iy-BD);
+    size_t id = (iy-BD) * N[0] + (ix-BD);
     
-  //   float_array_vector[3*id+0] = float( field(0,ix,iy) );
-  //   float_array_vector[3*id+1] = float( field(1,ix,iy) );
-  //   float_array_vector[3*id+2] = float( field(2,ix,iy) ); 
-  // }}
+    float_array_vector[id] = float( field(comp,ix,iy) );
+
+  }}
   
-  // // write data
-  // MPI_File_set_view(mpi_file, mpi_eof, vti_float3, vti_subarray_vector, "native", MPI_INFO_NULL);
-  // MPI_File_write_all(mpi_file, float_array_vector, N[0]*N[1], vti_float3, MPI_STATUS_IGNORE);
+  // write data
+  MPI_File_set_view(mpi_file, mpi_eof, MPI_FLOAT, vti_subarray_scalar, "native", MPI_INFO_NULL);
+  MPI_File_write_all(mpi_file, float_array_vector, N[0]*N[1], MPI_FLOAT, MPI_STATUS_IGNORE);
   
-  // // close file
-  // MPI_File_close(&mpi_file);  
+  // close file
+  MPI_File_close(&mpi_file);  
 }
 
 void simulation::write_vti_header( std::string file_name, long& N_bytes_scalar, long& N_bytes_vector )
@@ -485,6 +493,12 @@ void simulation::write_vti_header( std::string file_name, long& N_bytes_scalar, 
     os << "        <DataArray type=\"Float32\" Name=\"V\" NumberOfComponents=\"3\" format=\"appended\" offset=\"" << offset << "\">" << std::endl;
     os << "        </DataArray>" << std::endl;
     offset += bin_size_vector;
+    os << "        <DataArray type=\"Float32\" Name=\"rho\" NumberOfComponents=\"1\" format=\"appended\" offset=\"" << offset << "\">" << std::endl;
+    os << "        </DataArray>" << std::endl;
+    offset += bin_size_scalar;
+    os << "        <DataArray type=\"Float32\" Name=\"p\" NumberOfComponents=\"1\" format=\"appended\" offset=\"" << offset << "\">" << std::endl;
+    os << "        </DataArray>" << std::endl;
+    offset += bin_size_scalar;
     os << "      </CellData>" << std::endl;
     os << "      <PointData>" << std::endl;
     os << "      </PointData>" << std::endl;
@@ -719,8 +733,8 @@ void simulation::init_mpi()
   MPI_Type_contiguous(3, MPI_FLOAT, &vti_float3);
   MPI_Type_commit(&vti_float3);
 
-  MPI_Type_create_subarray(3, size_total, mpi_size, mpi_start, MPI_ORDER_C, MPI_FLOAT, &vti_subarray);
-  MPI_Type_commit(&vti_subarray);
+  MPI_Type_create_subarray(3, size_total, mpi_size, mpi_start, MPI_ORDER_C, MPI_FLOAT, &vti_subarray_scalar);
+  MPI_Type_commit(&vti_subarray_scalar);
   
   MPI_Type_create_subarray(3, size_total,mpi_size, mpi_start, MPI_ORDER_C, vti_float3, &vti_subarray_vector);
   MPI_Type_commit(&vti_subarray_vector);

@@ -16,7 +16,7 @@ class simulation
     MPI_Comm cart_comm;
     int mpi_rank, mpi_size, mpi_dims[2], mpi_coords[2];
     int mpi_neighbors[8]; // W,E,S,N, NW, NE, SW, SE
-    MPI_Datatype vti_subarray        = MPI_DATATYPE_NULL;
+    MPI_Datatype vti_subarray_scalar = MPI_DATATYPE_NULL;
     MPI_Datatype vti_subarray_vector = MPI_DATATYPE_NULL;
     MPI_Datatype vti_float3          = MPI_DATATYPE_NULL;
     float* float_array_vector;
@@ -60,6 +60,7 @@ class simulation
 
     ArrayND<double> E;
     ArrayND<double> B;
+    ArrayND<double> prim_e;
     ArrayND<double> cons_e;
 
     ArrayND<double> E_1;
