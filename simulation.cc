@@ -35,7 +35,8 @@ void simulation::setup()
   dx = L / N_tot;
   dx_inv = 1./dx;
 
-  int k = 2;
+  int kx = 2;
+  int ky = 2;
 
   for( size_t ix = start_i[0]; ix < end_i[0]; ix++ ){
   for( size_t iy = start_i[1]; iy < end_i[1]; iy++ ){
@@ -45,12 +46,12 @@ void simulation::setup()
 
     // mono chromatic wave
     E(0,ix,iy) = 0.;
-    E(1,ix,iy) = sin(k * x_val);  // Ey
+    E(1,ix,iy) = sin( kx * x_val + ky * y_val );  // Ey
     E(2,ix,iy) = 0.;
 
     B(0,ix,iy) = 0.;
     B(1,ix,iy) = 0.;
-    B(2,ix,iy) = sin(k * x_val);  // Bz
+    B(2,ix,iy) = sin( kx * x_val + ky * y_val );  // Bz
 
   }}
 
@@ -98,12 +99,6 @@ void simulation::get_dt()
 
 }
 
-// num_flux_BE_x( 1, ix, iy ) = - 0.5 * ( Ez_tilde( ix, iy+1 ) + Ez_tilde( ix, iy ) );
-// num_flux_BE_x( 4, ix, iy ) = + 0.5 * ( Bz_tilde( ix, iy+1 ) + Bz_tilde( ix, iy ) );
-
-// num_flux_BE_y( 0, ix, iy ) = + 0.5 * ( Ez_tilde( ix+1, iy ) + Ez_tilde( ix, iy ) );
-// num_flux_BE_y( 3, ix, iy ) = - 0.5 * ( Bz_tilde( ix+1, iy ) + Bz_tilde( ix, iy ) );
-
 void simulation::get_RHS_BE( ArrayND<double>& RHS, const ArrayND<double>& E_, const ArrayND<double>& B_ )
 {
 
@@ -144,21 +139,20 @@ void simulation::get_RHS_BE( ArrayND<double>& RHS, const ArrayND<double>& E_, co
       double Ez_avg = 0.25 * ( E_SW[2] + E_SE[2] + E_NE[2] + E_NW[2] );
       double Bz_avg = 0.25 * ( B_SW[2] + B_SE[2] + B_NE[2] + B_NW[2] );
 
-      double Bx_top = 0.5 * ( B_NW[0] + B_NE[0] );
-      double Bx_bot = 0.5 * ( B_SW[0] + B_SE[0] );
-      double By_lft = 0.5 * ( B_SW[1] + B_NW[1] );
-      double By_rgt = 0.5 * ( B_SE[1] + B_NE[1] );
+      double Bx_N = 0.5 * ( B_NW[0] + B_NE[0] );
+      double Bx_S = 0.5 * ( B_SW[0] + B_SE[0] );
+      double By_W = 0.5 * ( B_SW[1] + B_NW[1] );
+      double By_E = 0.5 * ( B_SE[1] + B_NE[1] );
 
-      double Ex_top = 0.5 * ( E_NW[0] + E_NE[0] );
-      double Ex_bot = 0.5 * ( E_SW[0] + E_SE[0] );
-      double Ey_lft = 0.5 * ( E_SW[1] + E_NW[1] );
-      double Ey_rgt = 0.5 * ( E_SE[1] + E_NE[1] );
+      double Ex_N = 0.5 * ( E_NW[0] + E_NE[0] );
+      double Ex_S = 0.5 * ( E_SW[0] + E_SE[0] );
+      double Ey_W = 0.5 * ( E_SW[1] + E_NW[1] );
+      double Ey_E = 0.5 * ( E_SE[1] + E_NE[1] );
 
-      Ez_tilde( ix,iy ) = Ez_avg + 0.5 * ( By_rgt - By_lft ) - 0.5 * ( Bx_top - Bx_bot ); 
-      Bz_tilde( ix,iy ) = Bz_avg + 0.5 * ( Ey_rgt - Ey_lft ) - 0.5 * ( Ex_top - Ex_bot ); 
+      Ez_tilde( ix,iy ) = Ez_avg + 0.5 * ( Bx_N - Bx_S ) + 0.5 * ( By_W - By_E ); 
+      Bz_tilde( ix,iy ) = Bz_avg + 0.5 * ( Ex_N - Ex_S ) + 0.5 * ( Ey_W - Ey_E ); 
 
   }}
-
 
   for( size_t ix = 0; ix < N[0]+1; ix++ ){
   for( size_t iy = 0; iy < N[1]  ; iy++ ){
@@ -177,11 +171,11 @@ void simulation::get_RHS_BE( ArrayND<double>& RHS, const ArrayND<double>& E_, co
     double Bz_pls = B_( 2, jx  , jy );
 
     num_flux_BE_x( 0, ix, iy ) =   0.;
-    num_flux_BE_x( 1, ix, iy ) = - 0.5 * ( Ez_pls + Ez_mns ) - 0.5 * ( By_pls - By_mns );
+    num_flux_BE_x( 1, ix, iy ) = - 0.5 * ( Ez_tilde( ix, iy+1 ) + Ez_tilde( ix, iy ) );
     num_flux_BE_x( 2, ix, iy ) = + 0.5 * ( Ey_pls + Ey_mns ) - 0.5 * ( Bz_pls - Bz_mns );
 
     num_flux_BE_x( 3, ix, iy ) =   0.;
-    num_flux_BE_x( 4, ix, iy ) = + 0.5 * ( Bz_pls + Bz_mns ) - 0.5 * ( Ey_pls - Ey_mns );
+    num_flux_BE_x( 4, ix, iy ) = + 0.5 * ( Bz_tilde( ix, iy+1 ) + Bz_tilde( ix, iy ) );
     num_flux_BE_x( 5, ix, iy ) = - 0.5 * ( By_pls + By_mns ) - 0.5 * ( Ez_pls - Ez_mns );
 
   }}
@@ -201,12 +195,12 @@ void simulation::get_RHS_BE( ArrayND<double>& RHS, const ArrayND<double>& E_, co
     double Bx_pls = B( 0, jx, jy   );
     double Bz_mns = B( 2, jx, jy-1 );
     double Bz_pls = B( 2, jx, jy   );
-
-    num_flux_BE_y( 0, ix, iy ) = + 0.5 * ( Ez_pls + Ez_mns ) - 0.5 * ( Bx_pls - Bx_mns );
+    
+    num_flux_BE_y( 0, ix, iy ) = + 0.5 * ( Ez_tilde( ix+1, iy ) + Ez_tilde( ix, iy ) );
     num_flux_BE_y( 1, ix, iy ) =   0.;
     num_flux_BE_y( 2, ix, iy ) = - 0.5 * ( Ex_pls + Ex_mns ) - 0.5 * ( Bz_pls - Bz_mns );
 
-    num_flux_BE_y( 3, ix, iy ) = - 0.5 * ( Bz_pls + Bz_mns ) - 0.5 * ( Ex_pls - Ex_mns );
+    num_flux_BE_y( 3, ix, iy ) = - 0.5 * ( Bz_tilde( ix+1, iy ) + Bz_tilde( ix, iy ) );
     num_flux_BE_y( 4, ix, iy ) =   0.;
     num_flux_BE_y( 5, ix, iy ) = + 0.5 * ( Bx_pls + Bx_mns ) - 0.5 * ( Ez_pls - Ez_mns );
 
