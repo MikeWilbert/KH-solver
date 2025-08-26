@@ -1,8 +1,5 @@
 #include "simulation.h"
 
-// Parallelen vti output und anschließend ghost cell exchange. Dann steht das framework
-
-
 simulation::simulation( const size_t N_, const size_t BD_, const double cfl_ ) :
 N_tot(N_), 
 BD(BD_), 
@@ -101,6 +98,12 @@ void simulation::get_dt()
 
 }
 
+// num_flux_BE_x( 1, ix, iy ) = - 0.5 * ( Ez_tilde( ix, iy+1 ) + Ez_tilde( ix, iy ) );
+// num_flux_BE_x( 4, ix, iy ) = + 0.5 * ( Bz_tilde( ix, iy+1 ) + Bz_tilde( ix, iy ) );
+
+// num_flux_BE_y( 0, ix, iy ) = + 0.5 * ( Ez_tilde( ix+1, iy ) + Ez_tilde( ix, iy ) );
+// num_flux_BE_y( 3, ix, iy ) = - 0.5 * ( Bz_tilde( ix+1, iy ) + Bz_tilde( ix, iy ) );
+
 void simulation::get_RHS_BE( ArrayND<double>& RHS, const ArrayND<double>& E_, const ArrayND<double>& B_ )
 {
 
@@ -174,11 +177,11 @@ void simulation::get_RHS_BE( ArrayND<double>& RHS, const ArrayND<double>& E_, co
     double Bz_pls = B_( 2, jx  , jy );
 
     num_flux_BE_x( 0, ix, iy ) =   0.;
-    num_flux_BE_x( 1, ix, iy ) = - 0.5 * ( Ez_tilde( ix, iy+1 ) + Ez_tilde( ix, iy ) );
+    num_flux_BE_x( 1, ix, iy ) = - 0.5 * ( Ez_pls + Ez_mns ) - 0.5 * ( By_pls - By_mns );
     num_flux_BE_x( 2, ix, iy ) = + 0.5 * ( Ey_pls + Ey_mns ) - 0.5 * ( Bz_pls - Bz_mns );
 
     num_flux_BE_x( 3, ix, iy ) =   0.;
-    num_flux_BE_x( 4, ix, iy ) = + 0.5 * ( Bz_tilde( ix, iy+1 ) + Bz_tilde( ix, iy ) );
+    num_flux_BE_x( 4, ix, iy ) = + 0.5 * ( Bz_pls + Bz_mns ) - 0.5 * ( Ey_pls - Ey_mns );
     num_flux_BE_x( 5, ix, iy ) = - 0.5 * ( By_pls + By_mns ) - 0.5 * ( Ez_pls - Ez_mns );
 
   }}
@@ -199,11 +202,11 @@ void simulation::get_RHS_BE( ArrayND<double>& RHS, const ArrayND<double>& E_, co
     double Bz_mns = B( 2, jx, jy-1 );
     double Bz_pls = B( 2, jx, jy   );
 
-    num_flux_BE_y( 0, ix, iy ) = + 0.5 * ( Ez_tilde( ix+1, iy ) + Ez_tilde( ix, iy ) );
+    num_flux_BE_y( 0, ix, iy ) = + 0.5 * ( Ez_pls + Ez_mns ) - 0.5 * ( Bx_pls - Bx_mns );
     num_flux_BE_y( 1, ix, iy ) =   0.;
     num_flux_BE_y( 2, ix, iy ) = - 0.5 * ( Ex_pls + Ex_mns ) - 0.5 * ( Bz_pls - Bz_mns );
 
-    num_flux_BE_y( 3, ix, iy ) = - 0.5 * ( Bz_tilde( ix+1, iy ) + Bz_tilde( ix, iy ) );
+    num_flux_BE_y( 3, ix, iy ) = - 0.5 * ( Bz_pls + Bz_mns ) - 0.5 * ( Ex_pls - Ex_mns );
     num_flux_BE_y( 4, ix, iy ) =   0.;
     num_flux_BE_y( 5, ix, iy ) = + 0.5 * ( Bx_pls + Bx_mns ) - 0.5 * ( Ez_pls - Ez_mns );
 
@@ -216,7 +219,7 @@ void simulation::get_RHS_BE( ArrayND<double>& RHS, const ArrayND<double>& E_, co
     for( size_t iy = 0; iy < N[1]; iy++ ){
 
       RHS( i, ix, iy ) = - ( num_flux_BE_x( i, ix+1, iy   ) - num_flux_BE_x( i, ix, iy ) ) * dx_inv;
-                        //  - ( num_flux_BE_y( i, ix  , iy+1 ) - num_flux_BE_y( i, ix, iy ) ) * dx_inv;
+                         - ( num_flux_BE_y( i, ix  , iy+1 ) - num_flux_BE_y( i, ix, iy ) ) * dx_inv;
 
     }}
 
