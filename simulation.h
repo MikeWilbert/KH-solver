@@ -60,6 +60,7 @@ class simulation
 
     ArrayND<double> E;
     ArrayND<double> B;
+    ArrayND<double> cons_e;
 
     ArrayND<double> E_1;
     ArrayND<double> B_1;
@@ -82,6 +83,7 @@ class simulation
     void print_vti();
     void write_vti_header( std::string file_name, long& N_bytes_scalar, long& N_bytes_vector );
     void write_vti_footer( std::string file_name );
-    void print_mpi_vector( std::string file_name, long& N_bytes_vector, const ArrayND<double>& field );
+    void print_mpi_vector( std::string file_name, long& N_bytes_vector, const ArrayND<double>& field, const size_t comp );
+    void print_mpi_scalar( std::string file_name, long& N_bytes_scalar, const ArrayND<double>& field, const size_t comp );
 
 };

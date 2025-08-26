@@ -11,7 +11,7 @@ int main(int argc, char** argv) {
 
     simulation simu( N, BD, cfl );
 
-    simu.run( run_time );
+    // simu.run( run_time );
 
     MPI_Finalize();
     return 0;

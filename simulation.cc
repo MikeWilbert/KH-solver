@@ -10,14 +10,15 @@ num_outputs(0)
 
   init_mpi();
 
-  E.resize({3, N_bd[0], N_bd[1]});
-  B.resize({3, N_bd[0], N_bd[1]});
+  E     .resize({3, N_bd[0], N_bd[1]});
+  B     .resize({3, N_bd[0], N_bd[1]});
+  cons_e.resize({5, N_bd[0], N_bd[1]});
 
   B_1.resize({3, N_bd[0], N_bd[1]});
   E_1.resize({3, N_bd[0], N_bd[1]});
 
-  RHS_BE_0     .resize({6, N[0]   , N[1]   });
-  RHS_BE_1     .resize({6, N[0]   , N[1]   });
+  RHS_BE_0     .resize({6, N[0]   , N[1]  });
+  RHS_BE_1     .resize({6, N[0]   , N[1]  });
   num_flux_BE_x.resize({6, N[0]+1 , N[1]  });
   num_flux_BE_y.resize({6, N[0]   , N[1]+1});
 
@@ -31,12 +32,16 @@ void simulation::setup()
 {
   time = 0.;
 
-  L = 2.*M_PI;
+  L = 1.;
   dx = L / N_tot;
   dx_inv = 1./dx;
 
   int kx = 2;
-  int ky = 2;
+  int ky = 3;
+
+  double Gamma = 1.4;
+
+  double rho, vx, vy, vz, p;
 
   for( size_t ix = start_i[0]; ix < end_i[0]; ix++ ){
   for( size_t iy = start_i[1]; iy < end_i[1]; iy++ ){
@@ -46,17 +51,46 @@ void simulation::setup()
 
     // mono chromatic wave
     E(0,ix,iy) = 0.;
-    E(1,ix,iy) = sin( kx * x_val + ky * y_val );  // Ey
+    E(1,ix,iy) = sin( 2.*M_PI / L * (kx * x_val + ky * y_val) );  // Ey
     E(2,ix,iy) = 0.;
 
     B(0,ix,iy) = 0.;
     B(1,ix,iy) = 0.;
-    B(2,ix,iy) = sin( kx * x_val + ky * y_val );  // Bz
+    B(2,ix,iy) = sin( 2.*M_PI / L * (kx * x_val + ky * y_val) );  // Bz
 
+    // classical Kelvin-Helmholtz
+    if( y_val > 0.75 * L || y_val < 0.25 * L )
+    {
+
+      rho = 1.;
+      vx  = -0.5;
+      vy  = 0.01 * sin( 2.*M_PI/L * x_val );
+      vz  = 0.;
+      p   = 2.5;
+
+    }
+    else
+    {
+
+      rho = 1.;
+      vx  = +0.5;
+      vy  = 0.01 * sin( 2.*M_PI/L * x_val );
+      vz  = 0.;
+      p   = 2.5;
+
+    }
+
+    cons_e( 0, ix, iy ) = rho;
+    cons_e( 1, ix, iy ) = rho * vx;
+    cons_e( 2, ix, iy ) = rho * vy;
+    cons_e( 3, ix, iy ) = rho * vz;
+    cons_e( 4, ix, iy ) = p / ( Gamma - 1. ) + 0.5 * rho * ( vx*vx + vy*vy + vz*vz );
+    
   }}
 
   set_ghost_cells(E);
   set_ghost_cells(B);
+  set_ghost_cells(cons_e);
 
 }
 
@@ -81,10 +115,7 @@ void simulation::run( const double run_time )
 
     }
 
-
     if(mpi_rank==0){ std::cout << "\rSimulation time: " << time << "   " << std::flush; }
-
-
 
   } while ( time < run_time );
 
@@ -317,8 +348,9 @@ void simulation::print_vti()
 
   write_vti_header( file_name, N_bytes_scalar, N_bytes_vector );
 
-  print_mpi_vector( file_name, N_bytes_vector, E );
-  print_mpi_vector( file_name, N_bytes_vector, B );
+  print_mpi_vector( file_name, N_bytes_vector, E     , 0 );
+  print_mpi_vector( file_name, N_bytes_vector, B     , 0 );
+  print_mpi_vector( file_name, N_bytes_vector, cons_e, 1 );
 
   write_vti_footer( file_name );
 
@@ -326,7 +358,7 @@ void simulation::print_vti()
 
 }
 
-void simulation::print_mpi_vector( std::string file_name, long& N_bytes_vector, const ArrayND<double>& field )
+void simulation::print_mpi_vector( std::string file_name, long& N_bytes_vector, const ArrayND<double>& field, const size_t comp )
 {
   if(mpi_rank==0)
   {
@@ -347,11 +379,12 @@ void simulation::print_mpi_vector( std::string file_name, long& N_bytes_vector, 
   for( size_t ix = BD; ix < N_bd[0] - BD; ix++ ){
   for( size_t iy = BD; iy < N_bd[1] - BD; iy++ ){
     
-    size_t id = (ix-BD) * N[1] + (iy-BD);
+    // size_t id = (ix-BD) * N[1] + (iy-BD);
+    size_t id = (iy-BD) * N[0] + (ix-BD);
     
-    float_array_vector[3*id+0] = float( field(0,ix,iy) );
-    float_array_vector[3*id+1] = float( field(1,ix,iy) );
-    float_array_vector[3*id+2] = float( field(2,ix,iy) ); 
+    float_array_vector[3*id+0] = float( field(0+comp,ix,iy) );
+    float_array_vector[3*id+1] = float( field(1+comp,ix,iy) );
+    float_array_vector[3*id+2] = float( field(2+comp,ix,iy) ); 
   }}
   
   // write data
@@ -360,6 +393,42 @@ void simulation::print_mpi_vector( std::string file_name, long& N_bytes_vector, 
   
   // close file
   MPI_File_close(&mpi_file);  
+}
+
+void simulation::print_mpi_scalar( std::string file_name, long& N_bytes_scalar, const ArrayND<double>& field, const size_t comp )
+{
+  if(mpi_rank==0)
+  {
+    std::ofstream binary_os(file_name.c_str(), std::ios::out | std::ios::app | std::ios::binary );
+    binary_os.write(reinterpret_cast<const char*>(&N_bytes_scalar),sizeof(uint64_t)); // size of following binary package
+    binary_os.close();
+  }MPI_Barrier(cart_comm);
+  
+  // // open file
+  // MPI_File mpi_file;
+  // MPI_File_open(cart_comm, file_name.c_str(), MPI_MODE_APPEND|MPI_MODE_WRONLY, MPI_INFO_NULL, &mpi_file);
+  
+  // // offset to end of file
+  // MPI_Offset mpi_eof;
+  // MPI_File_get_position(mpi_file, &mpi_eof);
+  // MPI_Barrier(cart_comm);
+  
+  // for( size_t ix = BD; ix < N_bd[0] - BD; ix++ ){
+  // for( size_t iy = BD; iy < N_bd[1] - BD; iy++ ){
+    
+  //   size_t id = (ix-BD) * N[1] + (iy-BD);
+    
+  //   float_array_vector[3*id+0] = float( field(0,ix,iy) );
+  //   float_array_vector[3*id+1] = float( field(1,ix,iy) );
+  //   float_array_vector[3*id+2] = float( field(2,ix,iy) ); 
+  // }}
+  
+  // // write data
+  // MPI_File_set_view(mpi_file, mpi_eof, vti_float3, vti_subarray_vector, "native", MPI_INFO_NULL);
+  // MPI_File_write_all(mpi_file, float_array_vector, N[0]*N[1], vti_float3, MPI_STATUS_IGNORE);
+  
+  // // close file
+  // MPI_File_close(&mpi_file);  
 }
 
 void simulation::write_vti_header( std::string file_name, long& N_bytes_scalar, long& N_bytes_vector )
@@ -372,7 +441,7 @@ void simulation::write_vti_header( std::string file_name, long& N_bytes_scalar, 
 	long N_all = N_l*N_l;
 	     N_bytes_scalar  =   N_all * sizeof(float);
 	     N_bytes_vector  = 3*N_all * sizeof(float);
-  // long bin_size_scalar = N_bytes_scalar + sizeof(uint64_t);// 2nd term is the size of the the leading integer announcing the numbers n the data chunk
+  long bin_size_scalar = N_bytes_scalar + sizeof(uint64_t);// 2nd term is the size of the the leading integer announcing the numbers n the data chunk
   long bin_size_vector = N_bytes_vector + sizeof(uint64_t);
 
   // header
@@ -394,7 +463,7 @@ void simulation::write_vti_header( std::string file_name, long& N_bytes_scalar, 
                                         << "0" << " " << "1"
 				 << "\" Origin=\""  << origin[0]  << " " << origin[1]  << " " << origin[2] 
 				 << "\" Spacing=\"" << dx << " " << dx << " " << dx
-         << "\" Direction=\"0 1 0 1 0 0 0 0 1\">" << std::endl;
+         << "\" Direction=\"1 0 0 0 1 0 0 0 1\">" << std::endl;
     
     os << "      <FieldData>" << std::endl;
     os << "        <DataArray type=\"Float32\" Name=\"TimeValue\" NumberOfTuples=\"1\" format=\"ascii\">" << std::endl;
@@ -411,6 +480,9 @@ void simulation::write_vti_header( std::string file_name, long& N_bytes_scalar, 
     os << "        </DataArray>" << std::endl;
     offset += bin_size_vector;
     os << "        <DataArray type=\"Float32\" Name=\"B\" NumberOfComponents=\"3\" format=\"appended\" offset=\"" << offset << "\">" << std::endl;
+    os << "        </DataArray>" << std::endl;
+    offset += bin_size_vector;
+    os << "        <DataArray type=\"Float32\" Name=\"V\" NumberOfComponents=\"3\" format=\"appended\" offset=\"" << offset << "\">" << std::endl;
     os << "        </DataArray>" << std::endl;
     offset += bin_size_vector;
     os << "      </CellData>" << std::endl;
@@ -639,10 +711,10 @@ void simulation::init_mpi()
   MPI_Type_create_subarray( 2, sizes, subsizes, starts, order, type, &mpi_edge_outer_NE );
   MPI_Type_commit(&mpi_edge_outer_NE);
 
-  // create derived MPI_datatypes for vti output
+  // create derived MPI_datatypes for vti output ( sizes swapped because of Fortran order in vtk! )
   int size_total[3] = { static_cast<int>(N_tot)             ,static_cast<int>(N_tot             ),1 };
-  int mpi_start[3]  = { static_cast<int>(mpi_coords[0]*N[0]),static_cast<int>(mpi_coords[1]*N[1]),0 };
-  int mpi_size[3]   = { static_cast<int>(              N[0]),static_cast<int>(              N[1]),1 };
+  int mpi_start[3]  = { static_cast<int>(mpi_coords[1]*N[1]),static_cast<int>(mpi_coords[0]*N[0]),0 };
+  int mpi_size[3]   = { static_cast<int>(              N[0]),static_cast<int>(              N[0]),1 };
 
   MPI_Type_contiguous(3, MPI_FLOAT, &vti_float3);
   MPI_Type_commit(&vti_float3);
