@@ -15,9 +15,15 @@ num_outputs(0)
   prim_e.resize({5, N_bd[0], N_bd[1]});
   cons_e.resize({5, N_bd[0], N_bd[1]});
 
-  B_1.resize({3, N_bd[0], N_bd[1]});
-  E_1.resize({3, N_bd[0], N_bd[1]});
+  prim_e_1        .resize({5, N_bd[0], N_bd[1]});
+  cons_e_1        .resize({5, N_bd[0], N_bd[1]});
+  RHS_fluid_0     .resize({5, N[0]   , N[1]  });
+  RHS_fluid_1     .resize({5, N[0]   , N[1]  });
+  num_flux_fluid_x.resize({5, N[0]+1 , N[1]  });
+  num_flux_fluid_y.resize({5, N[0]   , N[1]+1});
 
+  B_1          .resize({3, N_bd[0], N_bd[1]});
+  E_1          .resize({3, N_bd[0], N_bd[1]});
   RHS_BE_0     .resize({6, N[0]   , N[1]  });
   RHS_BE_1     .resize({6, N[0]   , N[1]  });
   num_flux_BE_x.resize({6, N[0]+1 , N[1]  });
@@ -133,7 +139,7 @@ void simulation::run( const double run_time )
 void simulation::get_dt()
 {
 
-  dt = cfl * dx;
+  dt = cfl * dx / sqrt(2.);
 
 }
 
@@ -259,8 +265,9 @@ void simulation::get_RHS_BE( ArrayND<double>& RHS, const ArrayND<double>& E_, co
 
 }
 
-void simulation::RK_step( ArrayND<double>& E_, ArrayND<double>& B_, 
-                          const ArrayND<double>& RHS_EB_1_, const ArrayND<double>& RHS_EB_2_, 
+void simulation::RK_step( ArrayND<double>& cons_e_, ArrayND<double>& E_, ArrayND<double>& B_, 
+                          const ArrayND<double>& RHS_fluid_e_1_, const ArrayND<double>& RHS_fluid_e_2_, 
+                          const ArrayND<double>& RHS_EB_1_     , const ArrayND<double>& RHS_EB_2_     , 
                           const double a_1, const double a_2 )
 {
 
@@ -269,6 +276,12 @@ void simulation::RK_step( ArrayND<double>& E_, ArrayND<double>& B_,
 
     size_t jx = ix+BD;
     size_t jy = iy+BD;
+
+    cons_e_(0, jx, jy) = cons_e(0, jx, jy) + a_1 * dt * RHS_fluid_e_1_( 0, ix, iy ) + a_2 * dt * RHS_fluid_e_2_( 0, ix, iy );
+    cons_e_(1, jx, jy) = cons_e(1, jx, jy) + a_1 * dt * RHS_fluid_e_1_( 1, ix, iy ) + a_2 * dt * RHS_fluid_e_2_( 1, ix, iy );
+    cons_e_(2, jx, jy) = cons_e(2, jx, jy) + a_1 * dt * RHS_fluid_e_1_( 2, ix, iy ) + a_2 * dt * RHS_fluid_e_2_( 2, ix, iy );
+    cons_e_(3, jx, jy) = cons_e(3, jx, jy) + a_1 * dt * RHS_fluid_e_1_( 3, ix, iy ) + a_2 * dt * RHS_fluid_e_2_( 3, ix, iy );
+    cons_e_(4, jx, jy) = cons_e(4, jx, jy) + a_1 * dt * RHS_fluid_e_1_( 4, ix, iy ) + a_2 * dt * RHS_fluid_e_2_( 4, ix, iy );
 
     B_(0, jx, jy) = B(0, jx, jy) + a_1 * dt * RHS_EB_1_( 0, ix, iy ) + a_2 * dt * RHS_EB_2_( 0, ix, iy );
     B_(1, jx, jy) = B(1, jx, jy) + a_1 * dt * RHS_EB_1_( 1, ix, iy ) + a_2 * dt * RHS_EB_2_( 1, ix, iy );
@@ -280,8 +293,26 @@ void simulation::RK_step( ArrayND<double>& E_, ArrayND<double>& B_,
 
   }}
 
+  set_ghost_cells(cons_e_);
   set_ghost_cells(E_);
   set_ghost_cells(B_);
+
+}
+
+void simulation::get_RHS_fluid( ArrayND<double>& RHS, ArrayND<double>& cons )
+{
+
+  for( size_t i = 0; i < 5; i++  )
+  {
+
+    for( size_t ix = 0; ix < N[0]; ix++ ){
+    for( size_t iy = 0; iy < N[1]; iy++ ){
+
+      RHS( i, ix, iy ) = 0.;
+
+    }}
+
+  }
 
 }
 
@@ -290,11 +321,15 @@ void simulation::step()
 
   get_dt();
 
-  get_RHS_BE( RHS_BE_0, E  , B   );
-  RK_step   ( E_1, B_1, RHS_BE_0, RHS_BE_1, 1. , 0.  );
+  // hier Funktion für RHS fluid einbauen und dann den RK_step erweitern!
 
-  get_RHS_BE( RHS_BE_1, E_1, B_1 );
-  RK_step   ( E  , B  , RHS_BE_0, RHS_BE_1, 0.5, 0.5 );
+  get_RHS_fluid( RHS_fluid_0, cons_e );
+  get_RHS_BE   ( RHS_BE_0, E  , B   );
+  RK_step      ( cons_e_1, E_1, B_1, RHS_fluid_0, RHS_fluid_1, RHS_BE_0, RHS_BE_1, 1. , 0.  );
+
+  get_RHS_fluid( RHS_fluid_1, cons_e_1 );
+  get_RHS_BE   ( RHS_BE_1, E_1, B_1 );
+  RK_step      ( cons_e  , E  , B  , RHS_fluid_0, RHS_fluid_1, RHS_BE_0, RHS_BE_1, 0.5, 0.5 );
 
 }
 

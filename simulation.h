@@ -63,11 +63,17 @@ class simulation
     ArrayND<double> prim_e;
     ArrayND<double> cons_e;
 
+    ArrayND<double> prim_e_1;
+    ArrayND<double> cons_e_1;
+    ArrayND<double> RHS_fluid_0;
+    ArrayND<double> RHS_fluid_1;
+    ArrayND<double> num_flux_fluid_x;
+    ArrayND<double> num_flux_fluid_y;
+
     ArrayND<double> E_1;
     ArrayND<double> B_1;
     ArrayND<double> RHS_BE_0;
     ArrayND<double> RHS_BE_1;
-
     ArrayND<double> num_flux_BE_x;
     ArrayND<double> num_flux_BE_y;
 
@@ -77,8 +83,10 @@ class simulation
     void step();
     void get_dt();
     void get_RHS_BE( ArrayND<double>& RHS, const ArrayND<double>& E_, const ArrayND<double>& B_ );
-    void RK_step( ArrayND<double>& E_, ArrayND<double>& B_, 
-                          const ArrayND<double>& RHS_EB_1_, const ArrayND<double>& RHS_EB_2_, 
+    void get_RHS_fluid( ArrayND<double>& RHS, ArrayND<double>& cons );
+    void RK_step( ArrayND<double>& cons_e_, ArrayND<double>& E_, ArrayND<double>& B_, 
+                          const ArrayND<double>& RHS_fluid_e_1_, const ArrayND<double>& RHS_fluid_e_2_, 
+                          const ArrayND<double>& RHS_EB_1_     , const ArrayND<double>& RHS_EB_2_, 
                           const double a_1, const double a_2 );
 
     void print_vti();
