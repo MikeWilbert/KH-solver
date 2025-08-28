@@ -67,6 +67,10 @@ class simulation
     ArrayND<double> cons_e_1;
     ArrayND<double> RHS_fluid_0;
     ArrayND<double> RHS_fluid_1;
+    ArrayND<double> flux_fluid_x;
+    ArrayND<double> flux_fluid_y;
+    ArrayND<double> speeds_fluid_x;
+    ArrayND<double> speeds_fluid_y;
     ArrayND<double> num_flux_fluid_x;
     ArrayND<double> num_flux_fluid_y;
 

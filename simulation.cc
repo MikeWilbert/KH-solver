@@ -17,6 +17,10 @@ num_outputs(0)
 
   prim_e_1        .resize({5, N_bd[0], N_bd[1]});
   cons_e_1        .resize({5, N_bd[0], N_bd[1]});
+  flux_fluid_x    .resize({5, N_bd[0], N_bd[1]});
+  flux_fluid_y    .resize({5, N_bd[0], N_bd[1]});
+  speeds_fluid_x  .resize({   N_bd[0], N_bd[1]});
+  speeds_fluid_y  .resize({   N_bd[0], N_bd[1]});
   RHS_fluid_0     .resize({5, N[0]   , N[1]  });
   RHS_fluid_1     .resize({5, N[0]   , N[1]  });
   num_flux_fluid_x.resize({5, N[0]+1 , N[1]  });
@@ -103,7 +107,7 @@ void simulation::setup()
 
   set_ghost_cells(E);
   set_ghost_cells(B);
-  set_ghost_cells(prim_e);
+  set_ghost_cells(cons_e);
 
 }
 
@@ -111,7 +115,7 @@ void simulation::run( const double run_time )
 {
 
   double out_time = 0.;
-  double out_interval = 0.2;
+  double out_interval = 0.01;
 
   do
   {
@@ -302,13 +306,106 @@ void simulation::RK_step( ArrayND<double>& cons_e_, ArrayND<double>& E_, ArrayND
 void simulation::get_RHS_fluid( ArrayND<double>& RHS, ArrayND<double>& cons )
 {
 
+  // primitives
+  for( size_t ix = start_i[0]; ix < end_i[0]; ix++ ){
+  for( size_t iy = start_i[1]; iy < end_i[1]; iy++ ){
+
+    double Gamma = 1.4;
+
+    double rho = cons(0, ix, iy);
+    double vx  = cons(1, ix, iy) / rho;
+    double vy  = cons(2, ix, iy) / rho;
+    double vz  = cons(3, ix, iy) / rho;
+    double p   = ( Gamma - 1. ) * ( cons(4, ix, iy) - 0.5 * rho * ( vx*vx + vy*vy + vz*vz ) );
+
+    prim_e(0, ix, iy) = rho;
+    prim_e(1, ix, iy) = vx;
+    prim_e(2, ix, iy) = vy;
+    prim_e(3, ix, iy) = vz;
+    prim_e(4, ix, iy) = p;
+
+  }}
+
+  // physical flux and max absolute speeds
+  for( size_t ix = start_i[0]; ix < end_i[0]; ix++ ){
+  for( size_t iy = start_i[1]; iy < end_i[1]; iy++ ){
+
+    double Gamma = 1.4;
+
+    double rho = prim_e(0, ix, iy);
+    double vx  = prim_e(1, ix, iy);
+    double vy  = prim_e(2, ix, iy);
+    double vz  = prim_e(3, ix, iy);
+    double p   = prim_e(4, ix, iy);
+
+    double E   = p / ( Gamma - 1. ) + 0.5 * rho * ( vx*vx + vy*vy + vz*vz );
+
+    flux_fluid_x( 0, ix, iy ) = vx * rho;
+    flux_fluid_x( 1, ix, iy ) = vx * vx * rho + p;
+    flux_fluid_x( 2, ix, iy ) = vx * vy * rho;
+    flux_fluid_x( 3, ix, iy ) = vx * vz * rho;
+    flux_fluid_x( 4, ix, iy ) = vx * ( E + p );
+
+    flux_fluid_y( 0, ix, iy ) = vy * rho;
+    flux_fluid_y( 1, ix, iy ) = vy * vx * rho;
+    flux_fluid_y( 2, ix, iy ) = vy * vy * rho + p;
+    flux_fluid_y( 3, ix, iy ) = vy * vz * rho;
+    flux_fluid_y( 4, ix, iy ) = vy * ( E + p );
+
+    double c_s = sqrt( Gamma * p / rho );
+
+    speeds_fluid_x( ix, iy ) = fabs( vx ) + c_s;
+    speeds_fluid_y( ix, iy ) = fabs( vy ) + c_s;
+
+  }}
+
+  // numerical flux - x-direction
+  for( size_t i = 0; i < 5; i++  )
+  {
+
+    for( size_t ix = 0; ix < N[0]+1; ix++ ){
+    for( size_t iy = 0; iy < N[1]  ; iy++ ){
+
+      size_t jx = ix+BD;
+      size_t jy = iy+BD;
+
+      double max_speed = std::max( speeds_fluid_x( jx, jy ), speeds_fluid_x( jx-1, jy ) );
+
+      num_flux_fluid_x( i, ix, iy ) =             0.5 * ( flux_fluid_x( i, jx, jy) + flux_fluid_x( i, jx-1, jy) )
+                                    - max_speed * 0.5 * ( cons        ( i, jx, jy) - cons        ( i, jx-1, jy) );
+
+    }}
+
+  }
+
+  // numerical flux - y-direction
+  for( size_t i = 0; i < 5; i++  )
+  {
+
+    for( size_t ix = 0; ix < N[0]  ; ix++ ){
+    for( size_t iy = 0; iy < N[1]+1; iy++ ){
+
+      size_t jx = ix+BD;
+      size_t jy = iy+BD;
+
+      double max_speed = std::max( speeds_fluid_y( jx, jy ), speeds_fluid_y( jx, jy-1 ) );
+
+      num_flux_fluid_y( i, ix, iy ) =             0.5 * ( flux_fluid_y( i, jx, jy) + flux_fluid_y( i, jx, jy-1) )
+                                    - max_speed * 0.5 * ( cons        ( i, jx, jy) - cons        ( i, jx, jy-1) );
+
+    }}
+
+  }
+
+  // RHS
   for( size_t i = 0; i < 5; i++  )
   {
 
     for( size_t ix = 0; ix < N[0]; ix++ ){
     for( size_t iy = 0; iy < N[1]; iy++ ){
 
-      RHS( i, ix, iy ) = 0.;
+      RHS( i, ix, iy ) = - ( num_flux_fluid_x( i, ix+1, iy   ) - num_flux_fluid_x( i, ix, iy ) ) * dx_inv
+                         - ( num_flux_fluid_y( i, ix  , iy+1 ) - num_flux_fluid_y( i, ix, iy ) ) * dx_inv;
 
     }}
 
@@ -320,8 +417,6 @@ void simulation::step()
 {
 
   get_dt();
-
-  // hier Funktion für RHS fluid einbauen und dann den RK_step erweitern!
 
   get_RHS_fluid( RHS_fluid_0, cons_e );
   get_RHS_BE   ( RHS_BE_0, E  , B   );
@@ -383,6 +478,26 @@ void simulation::set_ghost_cells( ArrayND<double>& field )
 
 void simulation::print_vti()
 {
+
+  // primitives
+  for( size_t ix = start_i[0]; ix < end_i[0]; ix++ ){
+  for( size_t iy = start_i[1]; iy < end_i[1]; iy++ ){
+
+    double Gamma = 1.4;
+
+    double rho = cons_e(0, ix, iy);
+    double vx  = cons_e(1, ix, iy) / rho;
+    double vy  = cons_e(2, ix, iy) / rho;
+    double vz  = cons_e(3, ix, iy) / rho;
+    double p   = ( Gamma - 1. ) * ( cons_e(4, ix, iy) - 0.5 * rho * ( vx*vx + vy*vy + vz*vz ) );
+
+    prim_e(0, ix, iy) = rho;
+    prim_e(1, ix, iy) = vx;
+    prim_e(2, ix, iy) = vy;
+    prim_e(3, ix, iy) = vz;
+    prim_e(4, ix, iy) = p;
+
+  }}
 
   const std::string file_name = "/home/fs1/mw/Reconnection/mikePhy/output_" + std::to_string(num_outputs) + ".vti";
 
