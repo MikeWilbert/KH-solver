@@ -973,7 +973,7 @@ void simulation::init_mpi()
   // create derived MPI_datatypes for vti output ( sizes swapped because of Fortran order in vtk! )
   int size_total[3] = { static_cast<int>(N_tot)             ,static_cast<int>(N_tot             ),1 };
   int mpi_start[3]  = { static_cast<int>(mpi_coords[1]*N[1]),static_cast<int>(mpi_coords[0]*N[0]),0 };
-  int mpi_size[3]   = { static_cast<int>(              N[0]),static_cast<int>(              N[0]),1 };
+  int mpi_size[3]   = { static_cast<int>(              N[1]),static_cast<int>(              N[0]),1 };
 
   MPI_Type_contiguous(3, MPI_FLOAT, &vti_float3);
   MPI_Type_commit(&vti_float3);
