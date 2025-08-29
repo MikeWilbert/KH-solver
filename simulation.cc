@@ -54,8 +54,8 @@ void simulation::setup()
 
   double rho, vx, vy, vz, p;
 
-  for( size_t ix = start_i[0]; ix < end_i[0]; ix++ ){
-  for( size_t iy = start_i[1]; iy < end_i[1]; iy++ ){
+  for( size_t ix = BD; ix < N_bd[0] - BD; ix++ ){
+  for( size_t iy = BD; iy < N_bd[1] - BD; iy++ ){
 
     double x_val = ( ix - BD + 0.5 ) * dx + mpi_coords[0] * N_tot / mpi_dims[0] * dx;
     double y_val = ( iy - BD + 0.5 ) * dx + mpi_coords[1] * N_tot / mpi_dims[1] * dx;
@@ -115,7 +115,7 @@ void simulation::run( const double run_time )
 {
 
   double out_time = 0.;
-  double out_interval = 0.01;
+  double out_interval = 0.1;
 
   do
   {
@@ -303,12 +303,11 @@ void simulation::RK_step( ArrayND<double>& cons_e_, ArrayND<double>& E_, ArrayND
 
 }
 
-void simulation::get_RHS_fluid( ArrayND<double>& RHS, ArrayND<double>& cons )
+void simulation::get_primitives( const ArrayND<double>& cons )
 {
 
-  // primitives
-  for( size_t ix = start_i[0]; ix < end_i[0]; ix++ ){
-  for( size_t iy = start_i[1]; iy < end_i[1]; iy++ ){
+  for( size_t ix = 0; ix < N_bd[0]; ix++ ){
+  for( size_t iy = 0; iy < N_bd[1]; iy++ ){
 
     double Gamma = 1.4;
 
@@ -326,9 +325,17 @@ void simulation::get_RHS_fluid( ArrayND<double>& RHS, ArrayND<double>& cons )
 
   }}
 
+}
+
+void simulation::get_RHS_fluid( ArrayND<double>& RHS, ArrayND<double>& cons )
+{
+
+  // primitives
+  get_primitives( cons );
+
   // physical flux and max absolute speeds
-  for( size_t ix = start_i[0]; ix < end_i[0]; ix++ ){
-  for( size_t iy = start_i[1]; iy < end_i[1]; iy++ ){
+  for( size_t ix = 0; ix < N_bd[0]; ix++ ){
+  for( size_t iy = 0; iy < N_bd[1]; iy++ ){
 
     double Gamma = 1.4;
 
@@ -480,24 +487,7 @@ void simulation::print_vti()
 {
 
   // primitives
-  for( size_t ix = start_i[0]; ix < end_i[0]; ix++ ){
-  for( size_t iy = start_i[1]; iy < end_i[1]; iy++ ){
-
-    double Gamma = 1.4;
-
-    double rho = cons_e(0, ix, iy);
-    double vx  = cons_e(1, ix, iy) / rho;
-    double vy  = cons_e(2, ix, iy) / rho;
-    double vz  = cons_e(3, ix, iy) / rho;
-    double p   = ( Gamma - 1. ) * ( cons_e(4, ix, iy) - 0.5 * rho * ( vx*vx + vy*vy + vz*vz ) );
-
-    prim_e(0, ix, iy) = rho;
-    prim_e(1, ix, iy) = vx;
-    prim_e(2, ix, iy) = vy;
-    prim_e(3, ix, iy) = vz;
-    prim_e(4, ix, iy) = p;
-
-  }}
+  get_primitives( cons_e );
 
   const std::string file_name = "/home/fs1/mw/Reconnection/mikePhy/output_" + std::to_string(num_outputs) + ".vti";
 
@@ -749,11 +739,6 @@ void simulation::init_mpi()
 
   sizes[0] = N_bd[0];
   sizes[1] = N_bd[1];
-
-  start_i[0] = BD; 
-  start_i[1] = BD; 
-  end_i  [0] = N_bd[0] - BD;
-  end_i  [1] = N_bd[1] - BD;
 
   // faces
 

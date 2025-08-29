@@ -46,9 +46,6 @@ class simulation
     size_t N[2]; // local internal size (1D)
     size_t N_bd[2];
 
-    size_t start_i[2]; // start index inner celles
-    size_t end_i  [2]; // end   index inner celles
-
     double dt;
     double dx;
     double L;
@@ -86,6 +83,7 @@ class simulation
     void set_ghost_cells( ArrayND<double>& field );
     void step();
     void get_dt();
+    void get_primitives( const ArrayND<double>& cons );
     void get_RHS_BE( ArrayND<double>& RHS, const ArrayND<double>& E_, const ArrayND<double>& B_ );
     void get_RHS_fluid( ArrayND<double>& RHS, ArrayND<double>& cons );
     void RK_step( ArrayND<double>& cons_e_, ArrayND<double>& E_, ArrayND<double>& B_, 
