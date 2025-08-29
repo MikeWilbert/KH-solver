@@ -212,15 +212,15 @@ void simulation::get_RHS_BE( ArrayND<double>& RHS, const ArrayND<double>& E_, co
       for( size_t i = 0; i < 3; i++ )
       {
 
-        E_SW[i] = E_( i, jx-1, jy-1 );
-        E_SE[i] = E_( i, jx  , jy-1 );
-        E_NW[i] = E_( i, jx-1, jy   );
-        E_NE[i] = E_( i, jx  , jy   );
+        E_SW[i] = E_( i, jx-1, jy-1 ) + 0. * minmod( E_( i, jx-2, jy-2 ), E_( i, jx-1, jy-1 ), E_( i, jx-0, jy-0 ) );
+        E_SE[i] = E_( i, jx  , jy-1 ) - 0. * minmod( E_( i, jx+1, jy-2 ), E_( i, jx  , jy-1 ), E_( i, jx-1, jy-0 ) );
+        E_NW[i] = E_( i, jx-1, jy   ) + 0. * minmod( E_( i, jx-2, jy+1 ), E_( i, jx-1, jy   ), E_( i, jx-0, jy-1 ) );
+        E_NE[i] = E_( i, jx  , jy   ) - 0. * minmod( E_( i, jx+1, jy+1 ), E_( i, jx  , jy   ), E_( i, jx-1, jy-1 ) );
 
-        B_SW[i] = B_( i, jx-1, jy-1 );
-        B_SE[i] = B_( i, jx  , jy-1 );
-        B_NW[i] = B_( i, jx-1, jy   );
-        B_NE[i] = B_( i, jx  , jy   );
+        B_SW[i] = B_( i, jx-1, jy-1 ) + 0. * minmod( B_( i, jx-2, jy-2 ), B_( i, jx-1, jy-1 ), B_( i, jx-0, jy-0 ) );
+        B_SE[i] = B_( i, jx  , jy-1 ) - 0. * minmod( B_( i, jx+1, jy-2 ), B_( i, jx  , jy-1 ), B_( i, jx-1, jy-0 ) );
+        B_NW[i] = B_( i, jx-1, jy   ) + 0. * minmod( B_( i, jx-2, jy+1 ), B_( i, jx-1, jy   ), B_( i, jx-0, jy-1 ) );
+        B_NE[i] = B_( i, jx  , jy   ) - 0. * minmod( B_( i, jx+1, jy+1 ), B_( i, jx  , jy   ), B_( i, jx-1, jy-1 ) );
 
       }
 
