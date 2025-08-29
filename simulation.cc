@@ -152,7 +152,7 @@ void simulation::get_dt()
 {
 
   // Maxwell cfl
-  // dt = cfl * dx / sqrt(2.);
+  dt = cfl * dx / sqrt(2.);
 
   // fluid cfl
   double v_max = 0.;
@@ -180,9 +180,12 @@ void simulation::get_dt()
 
   MPI_Allreduce( &v_max_loc, &v_max, 1, MPI_DOUBLE, MPI_SUM,cart_comm );
 
-  dt = cfl * dx / v_max;
+  // dt = cfl * dx / v_max;
 
 }
+
+
+
 
 void simulation::get_RHS_BE( ArrayND<double>& RHS, const ArrayND<double>& E_, const ArrayND<double>& B_ )
 {
