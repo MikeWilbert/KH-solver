@@ -89,6 +89,9 @@ class simulation
     void step();
     void get_dt();
     void get_primitives( const ArrayND<double>& cons );
+    void reconstruct( const ArrayND<double>& prim, ArrayND<double>& prim_ipol, ArrayND<double>& cons_ipol, ArrayND<double>& flux_ipol, ArrayND<double>& speed_ipol, int dir );
+    void get_num_flux( ArrayND<double>& num_flux_fluid, const ArrayND<double>& flux_ipol, 
+                      const ArrayND<double>& cons_ipol, const ArrayND<double>& speed_ipol, int dir );
     void get_RHS_BE( ArrayND<double>& RHS, const ArrayND<double>& E_, const ArrayND<double>& B_ );
     void get_RHS_fluid( ArrayND<double>& RHS, ArrayND<double>& cons );
     void RK_step( ArrayND<double>& cons_e_, ArrayND<double>& E_, ArrayND<double>& B_, 
