@@ -17,14 +17,20 @@ num_outputs(0)
 
   prim_e_1        .resize({5, N_bd[0], N_bd[1]});
   cons_e_1        .resize({5, N_bd[0], N_bd[1]});
-  flux_fluid_x    .resize({5, N_bd[0], N_bd[1]});
-  flux_fluid_y    .resize({5, N_bd[0], N_bd[1]});
-  speeds_fluid_x  .resize({   N_bd[0], N_bd[1]});
-  speeds_fluid_y  .resize({   N_bd[0], N_bd[1]});
+
   RHS_fluid_0     .resize({5, N[0]   , N[1]  });
   RHS_fluid_1     .resize({5, N[0]   , N[1]  });
-  num_flux_fluid_x.resize({5, N[0]+1 , N[1]  });
-  num_flux_fluid_y.resize({5, N[0]   , N[1]+1});
+
+  prim_ipol_x     .resize( {2, 5, N[0]+1, N[1]  } );
+  prim_ipol_y     .resize( {2, 5, N[0]  , N[1]+1} );
+  cons_ipol_x     .resize( {2, 5, N[0]+1, N[1]  } );
+  cons_ipol_y     .resize( {2, 5, N[0]  , N[1]+1} );
+  flux_ipol_x     .resize( {2, 5, N[0]+1, N[1]  } );
+  flux_ipol_y     .resize( {2, 5, N[0]  , N[1]+1} );
+  speed_ipol_x    .resize( {2,    N[0]+1, N[1]  } );
+  speed_ipol_y    .resize( {2,    N[0]  , N[1]+1} );
+  num_flux_fluid_x.resize( {   5, N[0]+1, N[1]  } );
+  num_flux_fluid_y.resize( {   5, N[0]  , N[1]+1} );
 
   B_1          .resize({3, N_bd[0], N_bd[1]});
   E_1          .resize({3, N_bd[0], N_bd[1]});
@@ -306,6 +312,7 @@ void simulation::RK_step( ArrayND<double>& cons_e_, ArrayND<double>& E_, ArrayND
 void simulation::get_primitives( const ArrayND<double>& cons )
 {
 
+  // get primitives
   for( size_t ix = 0; ix < N_bd[0]; ix++ ){
   for( size_t iy = 0; iy < N_bd[1]; iy++ ){
 
@@ -333,39 +340,97 @@ void simulation::get_RHS_fluid( ArrayND<double>& RHS, ArrayND<double>& cons )
   // primitives
   get_primitives( cons );
 
-  // physical flux and max absolute speeds
-  for( size_t ix = 0; ix < N_bd[0]; ix++ ){
-  for( size_t iy = 0; iy < N_bd[1]; iy++ ){
+  // interpolate
+  for( size_t i  = 0; i  < 5   ; i++ ){
+  for( size_t ix = 0; ix < N[0]+1; ix++ ){
+  for( size_t iy = 0; iy < N[1]  ; iy++ ){
+
+    size_t jx = ix+BD;
+    size_t jy = iy+BD;
+
+    prim_ipol_x( 0, i, ix, iy ) = prim_e( i, jx-1, jy   );
+    prim_ipol_x( 1, i, ix, iy ) = prim_e( i, jx  , jy   );
+
+  }}}
+
+  for( size_t i  = 0; i  < 5   ; i++ ){
+  for( size_t ix = 0; ix < N[0]  ; ix++ ){
+  for( size_t iy = 0; iy < N[1]+1; iy++ ){
+
+    size_t jx = ix+BD;
+    size_t jy = iy+BD;
+
+    prim_ipol_y( 0, i, ix, iy ) = prim_e( i, jx  , jy-1 );
+    prim_ipol_y( 1, i, ix, iy ) = prim_e( i, jx  , jy   );
+
+  }}}
+
+  // physical flux and max absolute speeds - x
+  for( size_t is = 0; is < 2     ; is++ ){
+  for( size_t ix = 0; ix < N[0]+1; ix++ ){
+  for( size_t iy = 0; iy < N[1]  ; iy++ ){
 
     double Gamma = 1.4;
 
-    double rho = prim_e(0, ix, iy);
-    double vx  = prim_e(1, ix, iy);
-    double vy  = prim_e(2, ix, iy);
-    double vz  = prim_e(3, ix, iy);
-    double p   = prim_e(4, ix, iy);
+    double rho = prim_ipol_x(is, 0, ix, iy);
+    double vx  = prim_ipol_x(is, 1, ix, iy);
+    double vy  = prim_ipol_x(is, 2, ix, iy);
+    double vz  = prim_ipol_x(is, 3, ix, iy);
+    double p   = prim_ipol_x(is, 4, ix, iy);
 
     double E   = p / ( Gamma - 1. ) + 0.5 * rho * ( vx*vx + vy*vy + vz*vz );
 
-    flux_fluid_x( 0, ix, iy ) = vx * rho;
-    flux_fluid_x( 1, ix, iy ) = vx * vx * rho + p;
-    flux_fluid_x( 2, ix, iy ) = vx * vy * rho;
-    flux_fluid_x( 3, ix, iy ) = vx * vz * rho;
-    flux_fluid_x( 4, ix, iy ) = vx * ( E + p );
+    cons_ipol_x( is, 0, ix, iy ) = rho;
+    cons_ipol_x( is, 1, ix, iy ) = rho * vx;
+    cons_ipol_x( is, 2, ix, iy ) = rho * vy;
+    cons_ipol_x( is, 3, ix, iy ) = rho * vz;
+    cons_ipol_x( is, 4, ix, iy ) = E;
 
-    flux_fluid_y( 0, ix, iy ) = vy * rho;
-    flux_fluid_y( 1, ix, iy ) = vy * vx * rho;
-    flux_fluid_y( 2, ix, iy ) = vy * vy * rho + p;
-    flux_fluid_y( 3, ix, iy ) = vy * vz * rho;
-    flux_fluid_y( 4, ix, iy ) = vy * ( E + p );
+    flux_ipol_x( is, 0, ix, iy ) = vx * rho;
+    flux_ipol_x( is, 1, ix, iy ) = vx * vx * rho + p;
+    flux_ipol_x( is, 2, ix, iy ) = vx * vy * rho;
+    flux_ipol_x( is, 3, ix, iy ) = vx * vz * rho;
+    flux_ipol_x( is, 4, ix, iy ) = vx * ( E + p );
 
     double c_s = sqrt( Gamma * p / rho );
 
-    speeds_fluid_x( ix, iy ) = fabs( vx ) + c_s;
-    speeds_fluid_y( ix, iy ) = fabs( vy ) + c_s;
+    speed_ipol_x( is, ix, iy ) = fabs( vx ) + c_s;
 
-  }}
+  }}}
 
+  // physical flux and max absolute speeds - x
+  for( size_t is = 0; is < 2     ; is++ ){
+  for( size_t ix = 0; ix < N[0]  ; ix++ ){
+  for( size_t iy = 0; iy < N[1]+1; iy++ ){
+
+    double Gamma = 1.4;
+
+    double rho = prim_ipol_y(is, 0, ix, iy);
+    double vx  = prim_ipol_y(is, 1, ix, iy);
+    double vy  = prim_ipol_y(is, 2, ix, iy);
+    double vz  = prim_ipol_y(is, 3, ix, iy);
+    double p   = prim_ipol_y(is, 4, ix, iy);
+
+    double E   = p / ( Gamma - 1. ) + 0.5 * rho * ( vx*vx + vy*vy + vz*vz );
+
+    cons_ipol_y( is, 0, ix, iy ) = rho;
+    cons_ipol_y( is, 1, ix, iy ) = rho * vx;
+    cons_ipol_y( is, 2, ix, iy ) = rho * vy;
+    cons_ipol_y( is, 3, ix, iy ) = rho * vz;
+    cons_ipol_y( is, 4, ix, iy ) = E;
+
+    flux_ipol_y( is, 0, ix, iy ) = vy * rho;
+    flux_ipol_y( is, 1, ix, iy ) = vy * vx * rho;
+    flux_ipol_y( is, 2, ix, iy ) = vy * vy * rho + p;
+    flux_ipol_y( is, 3, ix, iy ) = vy * vz * rho;
+    flux_ipol_y( is, 4, ix, iy ) = vy * ( E + p );
+
+    double c_s = sqrt( Gamma * p / rho );
+
+    speed_ipol_y( is, ix, iy ) = fabs( vy ) + c_s;
+
+  }}}
+  
   // numerical flux - x-direction
   for( size_t i = 0; i < 5; i++  )
   {
@@ -373,13 +438,10 @@ void simulation::get_RHS_fluid( ArrayND<double>& RHS, ArrayND<double>& cons )
     for( size_t ix = 0; ix < N[0]+1; ix++ ){
     for( size_t iy = 0; iy < N[1]  ; iy++ ){
 
-      size_t jx = ix+BD;
-      size_t jy = iy+BD;
+      double max_speed = std::max( speed_ipol_x( 1, ix, iy ), speed_ipol_x( 0, ix, iy ) );
 
-      double max_speed = std::max( speeds_fluid_x( jx, jy ), speeds_fluid_x( jx-1, jy ) );
-
-      num_flux_fluid_x( i, ix, iy ) =             0.5 * ( flux_fluid_x( i, jx, jy) + flux_fluid_x( i, jx-1, jy) )
-                                    - max_speed * 0.5 * ( cons        ( i, jx, jy) - cons        ( i, jx-1, jy) );
+      num_flux_fluid_x( i, ix, iy ) =             0.5 * ( flux_ipol_x( 1, i, ix, iy) + flux_ipol_x( 0, i, ix, iy) )
+                                    - max_speed * 0.5 * ( cons_ipol_x( 1, i, ix, iy) - cons_ipol_x( 0, i, ix, iy) );
 
     }}
 
@@ -392,13 +454,10 @@ void simulation::get_RHS_fluid( ArrayND<double>& RHS, ArrayND<double>& cons )
     for( size_t ix = 0; ix < N[0]  ; ix++ ){
     for( size_t iy = 0; iy < N[1]+1; iy++ ){
 
-      size_t jx = ix+BD;
-      size_t jy = iy+BD;
+      double max_speed = std::max( speed_ipol_y( 1, ix, iy ), speed_ipol_y( 0, ix, iy ) );
 
-      double max_speed = std::max( speeds_fluid_y( jx, jy ), speeds_fluid_y( jx, jy-1 ) );
-
-      num_flux_fluid_y( i, ix, iy ) =             0.5 * ( flux_fluid_y( i, jx, jy) + flux_fluid_y( i, jx, jy-1) )
-                                    - max_speed * 0.5 * ( cons        ( i, jx, jy) - cons        ( i, jx, jy-1) );
+      num_flux_fluid_y( i, ix, iy ) =             0.5 * ( flux_ipol_y( 1, i, ix, iy) + flux_ipol_y( 0, i, ix, iy) )
+                                    - max_speed * 0.5 * ( cons_ipol_y( 1, i, ix, iy) - cons_ipol_y( 0, i, ix, iy) );
 
     }}
 
