@@ -151,7 +151,36 @@ void simulation::run( const double run_time )
 void simulation::get_dt()
 {
 
-  dt = cfl * dx / sqrt(2.);
+  // Maxwell cfl
+  // dt = cfl * dx / sqrt(2.);
+
+  // fluid cfl
+  double v_max = 0.;
+  double v_max_loc = 0.;
+
+  for( size_t ix = BD; ix < N_bd[0]-BD; ix++ ){
+  for( size_t iy = BD; iy < N_bd[1]-BD; iy++ ){
+
+    double Gamma = 1.4;
+
+    double rho = prim_e(0, ix, iy);
+    double vx  = prim_e(1, ix, iy);
+    double vy  = prim_e(2, ix, iy);
+    double vz  = prim_e(3, ix, iy);
+    double p   = prim_e(4, ix, iy);
+
+    double c_s = sqrt( Gamma * p / rho );
+    double v2  = vx*vx + vy*vy + vz*vz;
+    
+    double v_tmp = sqrt(v2) + c_s;
+
+    v_max_loc = std::max( v_max_loc, v_tmp );
+
+  }}
+
+  MPI_Allreduce( &v_max_loc, &v_max, 1, MPI_DOUBLE, MPI_SUM,cart_comm );
+
+  dt = cfl * dx / v_max;
 
 }
 
@@ -515,6 +544,8 @@ void simulation::step()
   get_RHS_BE   ( RHS_BE_1, E_1, B_1 );
   RK_step      ( cons_e  , E  , B  , RHS_fluid_0, RHS_fluid_1, RHS_BE_0, RHS_BE_1, 0.5, 0.5 );
 
+  get_primitives( cons_e );
+
 }
 
 void simulation::set_ghost_cells( ArrayND<double>& field )
@@ -567,9 +598,6 @@ void simulation::set_ghost_cells( ArrayND<double>& field )
 
 void simulation::print_vti()
 {
-
-  // primitives
-  get_primitives( cons_e );
 
   const std::string file_name = "/home/fs1/mw/Reconnection/mikePhy/output_" + std::to_string(num_outputs) + ".vti";
 
