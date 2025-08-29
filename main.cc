@@ -4,9 +4,9 @@
 int main(int argc, char** argv) {
     MPI_Init(&argc, &argv);
 
-    const size_t N        = 512;     // spatial resolution
+    const size_t N        = 1024;     // spatial resolution
     const size_t BD       = 2;       // # ghost cells per side
-    const double cfl      = 0.2;    // CFL number
+    const double cfl      = 0.25;    // CFL number
     const double run_time = 3.; // run time
 
     simulation simu( N, BD, cfl );
