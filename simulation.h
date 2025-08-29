@@ -75,6 +75,8 @@ class simulation
     ArrayND<double> speed_ipol_y;
     ArrayND<double> num_flux_fluid_x;
     ArrayND<double> num_flux_fluid_y;
+    ArrayND<double> TVD_fluid_x;
+    ArrayND<double> TVD_fluid_y;
 
     ArrayND<double> E_1;
     ArrayND<double> B_1;
@@ -89,7 +91,7 @@ class simulation
     void step();
     void get_dt();
     void get_primitives( const ArrayND<double>& cons );
-    void reconstruct( const ArrayND<double>& prim, ArrayND<double>& prim_ipol, ArrayND<double>& cons_ipol, ArrayND<double>& flux_ipol, ArrayND<double>& speed_ipol, int dir );
+    void reconstruct( const ArrayND<double>& prim, ArrayND<double>& TVD_fluid, ArrayND<double>& prim_ipol, ArrayND<double>& cons_ipol, ArrayND<double>& flux_ipol, ArrayND<double>& speed_ipol, int dir );
     void get_num_flux( ArrayND<double>& num_flux_fluid, const ArrayND<double>& flux_ipol, 
                       const ArrayND<double>& cons_ipol, const ArrayND<double>& speed_ipol, int dir );
     void get_RHS_BE( ArrayND<double>& RHS, const ArrayND<double>& E_, const ArrayND<double>& B_ );
@@ -98,6 +100,10 @@ class simulation
                           const ArrayND<double>& RHS_fluid_e_1_, const ArrayND<double>& RHS_fluid_e_2_, 
                           const ArrayND<double>& RHS_EB_1_     , const ArrayND<double>& RHS_EB_2_, 
                           const double a_1, const double a_2 );
+
+    template <typename T> constexpr int sgn(T val);
+    double minmod( const double a, const double b );
+    double minmod( const double a, const double b, const double c );
 
     void print_vti();
     void write_vti_header( std::string file_name, long& N_bytes_scalar, long& N_bytes_vector );
