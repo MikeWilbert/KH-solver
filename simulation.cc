@@ -10,13 +10,11 @@ num_outputs(0)
 
   init_mpi();
 
-  E     .resize({3, N_bd[0], N_bd[1]});
-  B     .resize({3, N_bd[0], N_bd[1]});
-  prim_e.resize({5, N_bd[0], N_bd[1]});
-  cons_e.resize({5, N_bd[0], N_bd[1]});
+  prim.resize({5, N_bd[0], N_bd[1]});
+  cons.resize({5, N_bd[0], N_bd[1]});
 
-  prim_e_1        .resize({5, N_bd[0], N_bd[1]});
-  cons_e_1        .resize({5, N_bd[0], N_bd[1]});
+  prim_1        .resize({5, N_bd[0], N_bd[1]});
+  cons_1        .resize({5, N_bd[0], N_bd[1]});
 
   RHS_fluid_0     .resize({5, N[0]   , N[1]  });
   RHS_fluid_1     .resize({5, N[0]   , N[1]  });
@@ -34,13 +32,6 @@ num_outputs(0)
   TVD_fluid_x     .resize( {   5, N[0]+2, N[1]  } );
   TVD_fluid_y     .resize( {   5, N[0]  , N[1]+2} );
 
-  B_1          .resize({3, N_bd[0], N_bd[1]});
-  E_1          .resize({3, N_bd[0], N_bd[1]});
-  RHS_BE_0     .resize({6, N[0]   , N[1]  });
-  RHS_BE_1     .resize({6, N[0]   , N[1]  });
-  num_flux_BE_x.resize({6, N[0]+1 , N[1]  });
-  num_flux_BE_y.resize({6, N[0]   , N[1]+1});
-
   setup();
 
   print_vti();
@@ -55,9 +46,6 @@ void simulation::setup()
   dx = L / N_tot;
   dx_inv = 1./dx;
 
-  int kx = 1;
-  int ky = 3;
-
   double Gamma = 1.4;
 
   double rho, vx, vy, vz, p;
@@ -68,16 +56,7 @@ void simulation::setup()
     double x_val = ( ix - BD + 0.5 ) * dx + mpi_coords[0] * N_tot / mpi_dims[0] * dx;
     double y_val = ( iy - BD + 0.5 ) * dx + mpi_coords[1] * N_tot / mpi_dims[1] * dx;
 
-    // mono chromatic wave
-    E(0,ix,iy) = 0.;
-    E(1,ix,iy) = sin( 2.*M_PI / L * (kx * x_val + ky * y_val) );  // Ey
-    E(2,ix,iy) = 0.;
-
-    B(0,ix,iy) = 0.;
-    B(1,ix,iy) = 0.;
-    B(2,ix,iy) = sin( 2.*M_PI / L * (kx * x_val + ky * y_val) );  // Bz
-
-    // classical Kelvin-Helmholtz
+    // Kelvin-Helmholtz
     if( y_val > 0.75 * L || y_val < 0.25 * L ) // outside
     {
 
@@ -99,23 +78,21 @@ void simulation::setup()
 
     }
 
-    prim_e( 0, ix, iy ) = rho;
-    prim_e( 1, ix, iy ) = vx;
-    prim_e( 2, ix, iy ) = vy;
-    prim_e( 3, ix, iy ) = vz;
-    prim_e( 4, ix, iy ) = p;
+    prim( 0, ix, iy ) = rho;
+    prim( 1, ix, iy ) = vx;
+    prim( 2, ix, iy ) = vy;
+    prim( 3, ix, iy ) = vz;
+    prim( 4, ix, iy ) = p;
 
-    cons_e( 0, ix, iy ) = rho;
-    cons_e( 1, ix, iy ) = rho * vx;
-    cons_e( 2, ix, iy ) = rho * vy;
-    cons_e( 3, ix, iy ) = rho * vz;
-    cons_e( 4, ix, iy ) = p / ( Gamma - 1. ) + 0.5 * rho * ( vx*vx + vy*vy + vz*vz );
+    cons( 0, ix, iy ) = rho;
+    cons( 1, ix, iy ) = rho * vx;
+    cons( 2, ix, iy ) = rho * vy;
+    cons( 3, ix, iy ) = rho * vz;
+    cons( 4, ix, iy ) = p / ( Gamma - 1. ) + 0.5 * rho * ( vx*vx + vy*vy + vz*vz );
     
   }}
 
-  set_ghost_cells(E);
-  set_ghost_cells(B);
-  set_ghost_cells(cons_e);
+  set_ghost_cells(cons);
 
 }
 
@@ -151,9 +128,6 @@ void simulation::run( const double run_time )
 void simulation::get_dt()
 {
 
-  // Maxwell cfl
-  dt = cfl * dx / sqrt(2.);
-
   // fluid cfl
   double v_max = 0.;
   double v_max_loc = 0.;
@@ -163,11 +137,11 @@ void simulation::get_dt()
 
     double Gamma = 1.4;
 
-    double rho = prim_e(0, ix, iy);
-    double vx  = prim_e(1, ix, iy);
-    double vy  = prim_e(2, ix, iy);
-    double vz  = prim_e(3, ix, iy);
-    double p   = prim_e(4, ix, iy);
+    double rho = prim(0, ix, iy);
+    double vx  = prim(1, ix, iy);
+    double vy  = prim(2, ix, iy);
+    double vz  = prim(3, ix, iy);
+    double p   = prim(4, ix, iy);
 
     double c_s = sqrt( Gamma * p / rho );
     double v2  = vx*vx + vy*vy + vz*vz;
@@ -180,138 +154,12 @@ void simulation::get_dt()
 
   MPI_Allreduce( &v_max_loc, &v_max, 1, MPI_DOUBLE, MPI_SUM,cart_comm );
 
-  // dt = cfl * dx / v_max;
+  dt = cfl * dx / v_max;
 
 }
 
-
-
-
-void simulation::get_RHS_BE( ArrayND<double>& RHS, const ArrayND<double>& E_, const ArrayND<double>& B_ )
-{
-
-  ArrayND<double> Ez_tilde( { N[0]+1, N[1]+1 } );
-  ArrayND<double> Bz_tilde( { N[0]+1, N[1]+1 } );
-
-  double E_SW[3];
-  double E_SE[3];
-  double E_NW[3];
-  double E_NE[3];
-
-  double B_SW[3];
-  double B_SE[3];
-  double B_NW[3];
-  double B_NE[3];
-
-  for( size_t ix = 0; ix < N[0]+1; ix++ ){
-  for( size_t iy = 0; iy < N[1]+1; iy++ ){
-
-      size_t jx = ix+BD;
-      size_t jy = iy+BD;
-
-      for( size_t i = 0; i < 3; i++ )
-      {
-
-        E_SW[i] = E_( i, jx-1, jy-1 ) + 0. * minmod( E_( i, jx-2, jy-2 ), E_( i, jx-1, jy-1 ), E_( i, jx-0, jy-0 ) );
-        E_SE[i] = E_( i, jx  , jy-1 ) - 0. * minmod( E_( i, jx+1, jy-2 ), E_( i, jx  , jy-1 ), E_( i, jx-1, jy-0 ) );
-        E_NW[i] = E_( i, jx-1, jy   ) + 0. * minmod( E_( i, jx-2, jy+1 ), E_( i, jx-1, jy   ), E_( i, jx-0, jy-1 ) );
-        E_NE[i] = E_( i, jx  , jy   ) - 0. * minmod( E_( i, jx+1, jy+1 ), E_( i, jx  , jy   ), E_( i, jx-1, jy-1 ) );
-
-        B_SW[i] = B_( i, jx-1, jy-1 ) + 0. * minmod( B_( i, jx-2, jy-2 ), B_( i, jx-1, jy-1 ), B_( i, jx-0, jy-0 ) );
-        B_SE[i] = B_( i, jx  , jy-1 ) - 0. * minmod( B_( i, jx+1, jy-2 ), B_( i, jx  , jy-1 ), B_( i, jx-1, jy-0 ) );
-        B_NW[i] = B_( i, jx-1, jy   ) + 0. * minmod( B_( i, jx-2, jy+1 ), B_( i, jx-1, jy   ), B_( i, jx-0, jy-1 ) );
-        B_NE[i] = B_( i, jx  , jy   ) - 0. * minmod( B_( i, jx+1, jy+1 ), B_( i, jx  , jy   ), B_( i, jx-1, jy-1 ) );
-
-      }
-
-      double Ez_avg = 0.25 * ( E_SW[2] + E_SE[2] + E_NE[2] + E_NW[2] );
-      double Bz_avg = 0.25 * ( B_SW[2] + B_SE[2] + B_NE[2] + B_NW[2] );
-
-      double Bx_N = 0.5 * ( B_NW[0] + B_NE[0] );
-      double Bx_S = 0.5 * ( B_SW[0] + B_SE[0] );
-      double By_W = 0.5 * ( B_SW[1] + B_NW[1] );
-      double By_E = 0.5 * ( B_SE[1] + B_NE[1] );
-
-      double Ex_N = 0.5 * ( E_NW[0] + E_NE[0] );
-      double Ex_S = 0.5 * ( E_SW[0] + E_SE[0] );
-      double Ey_W = 0.5 * ( E_SW[1] + E_NW[1] );
-      double Ey_E = 0.5 * ( E_SE[1] + E_NE[1] );
-
-      Ez_tilde( ix,iy ) = Ez_avg + 0.5 * ( Bx_N - Bx_S ) + 0.5 * ( By_W - By_E ); 
-      Bz_tilde( ix,iy ) = Bz_avg + 0.5 * ( Ex_N - Ex_S ) + 0.5 * ( Ey_W - Ey_E ); 
-
-  }}
-
-  for( size_t ix = 0; ix < N[0]+1; ix++ ){
-  for( size_t iy = 0; iy < N[1]  ; iy++ ){
-
-    size_t jx = ix+BD;
-    size_t jy = iy+BD;
-
-    double Ey_mns = E_( 1, jx-1, jy );
-    double Ey_pls = E_( 1, jx  , jy );
-    double Ez_mns = E_( 2, jx-1, jy );
-    double Ez_pls = E_( 2, jx  , jy );
-
-    double By_mns = B_( 1, jx-1, jy );
-    double By_pls = B_( 1, jx  , jy );
-    double Bz_mns = B_( 2, jx-1, jy );
-    double Bz_pls = B_( 2, jx  , jy );
-
-    num_flux_BE_x( 0, ix, iy ) =   0.;
-    num_flux_BE_x( 1, ix, iy ) = - 0.5 * ( Ez_tilde( ix, iy+1 ) + Ez_tilde( ix, iy ) );
-    num_flux_BE_x( 2, ix, iy ) = + 0.5 * ( Ey_pls + Ey_mns ) - 0.5 * ( Bz_pls - Bz_mns );
-
-    num_flux_BE_x( 3, ix, iy ) =   0.;
-    num_flux_BE_x( 4, ix, iy ) = + 0.5 * ( Bz_tilde( ix, iy+1 ) + Bz_tilde( ix, iy ) );
-    num_flux_BE_x( 5, ix, iy ) = - 0.5 * ( By_pls + By_mns ) - 0.5 * ( Ez_pls - Ez_mns );
-
-  }}
-
-  for( size_t ix = 0; ix < N[0]  ; ix++ ){
-  for( size_t iy = 0; iy < N[1]+1; iy++ ){
-
-    size_t jx = ix+BD;
-    size_t jy = iy+BD;
-
-    double Ex_mns = E( 0, jx, jy-1 );
-    double Ex_pls = E( 0, jx, jy   );
-    double Ez_mns = E( 2, jx, jy-1 );
-    double Ez_pls = E( 2, jx, jy   );
-
-    double Bx_mns = B( 0, jx, jy-1 );
-    double Bx_pls = B( 0, jx, jy   );
-    double Bz_mns = B( 2, jx, jy-1 );
-    double Bz_pls = B( 2, jx, jy   );
-    
-    num_flux_BE_y( 0, ix, iy ) = + 0.5 * ( Ez_tilde( ix+1, iy ) + Ez_tilde( ix, iy ) );
-    num_flux_BE_y( 1, ix, iy ) =   0.;
-    num_flux_BE_y( 2, ix, iy ) = - 0.5 * ( Ex_pls + Ex_mns ) - 0.5 * ( Bz_pls - Bz_mns );
-
-    num_flux_BE_y( 3, ix, iy ) = - 0.5 * ( Bz_tilde( ix+1, iy ) + Bz_tilde( ix, iy ) );
-    num_flux_BE_y( 4, ix, iy ) =   0.;
-    num_flux_BE_y( 5, ix, iy ) = + 0.5 * ( Bx_pls + Bx_mns ) - 0.5 * ( Ez_pls - Ez_mns );
-
-  }}
-
-  for( size_t i = 0; i < 6; i++  )
-  {
-
-    for( size_t ix = 0; ix < N[0]; ix++ ){
-    for( size_t iy = 0; iy < N[1]; iy++ ){
-
-      RHS( i, ix, iy ) = - ( num_flux_BE_x( i, ix+1, iy   ) - num_flux_BE_x( i, ix, iy ) ) * dx_inv
-                         - ( num_flux_BE_y( i, ix  , iy+1 ) - num_flux_BE_y( i, ix, iy ) ) * dx_inv;
-
-    }}
-
-  }
-
-}
-
-void simulation::RK_step( ArrayND<double>& cons_e_, ArrayND<double>& E_, ArrayND<double>& B_, 
-                          const ArrayND<double>& RHS_fluid_e_1_, const ArrayND<double>& RHS_fluid_e_2_, 
-                          const ArrayND<double>& RHS_EB_1_     , const ArrayND<double>& RHS_EB_2_     , 
+void simulation::RK_step( ArrayND<double>& cons_,
+                          const ArrayND<double>& RHS_fluid_1_, const ArrayND<double>& RHS_fluid_2_,
                           const double a_1, const double a_2 )
 {
 
@@ -321,25 +169,15 @@ void simulation::RK_step( ArrayND<double>& cons_e_, ArrayND<double>& E_, ArrayND
     size_t jx = ix+BD;
     size_t jy = iy+BD;
 
-    cons_e_(0, jx, jy) = cons_e(0, jx, jy) + a_1 * dt * RHS_fluid_e_1_( 0, ix, iy ) + a_2 * dt * RHS_fluid_e_2_( 0, ix, iy );
-    cons_e_(1, jx, jy) = cons_e(1, jx, jy) + a_1 * dt * RHS_fluid_e_1_( 1, ix, iy ) + a_2 * dt * RHS_fluid_e_2_( 1, ix, iy );
-    cons_e_(2, jx, jy) = cons_e(2, jx, jy) + a_1 * dt * RHS_fluid_e_1_( 2, ix, iy ) + a_2 * dt * RHS_fluid_e_2_( 2, ix, iy );
-    cons_e_(3, jx, jy) = cons_e(3, jx, jy) + a_1 * dt * RHS_fluid_e_1_( 3, ix, iy ) + a_2 * dt * RHS_fluid_e_2_( 3, ix, iy );
-    cons_e_(4, jx, jy) = cons_e(4, jx, jy) + a_1 * dt * RHS_fluid_e_1_( 4, ix, iy ) + a_2 * dt * RHS_fluid_e_2_( 4, ix, iy );
-
-    B_(0, jx, jy) = B(0, jx, jy) + a_1 * dt * RHS_EB_1_( 0, ix, iy ) + a_2 * dt * RHS_EB_2_( 0, ix, iy );
-    B_(1, jx, jy) = B(1, jx, jy) + a_1 * dt * RHS_EB_1_( 1, ix, iy ) + a_2 * dt * RHS_EB_2_( 1, ix, iy );
-    B_(2, jx, jy) = B(2, jx, jy) + a_1 * dt * RHS_EB_1_( 2, ix, iy ) + a_2 * dt * RHS_EB_2_( 2, ix, iy );
-
-    E_(0, jx, jy) = E(0, jx, jy) + a_1 * dt * RHS_EB_1_( 3, ix, iy ) + a_2 * dt * RHS_EB_2_( 3, ix, iy );
-    E_(1, jx, jy) = E(1, jx, jy) + a_1 * dt * RHS_EB_1_( 4, ix, iy ) + a_2 * dt * RHS_EB_2_( 4, ix, iy );
-    E_(2, jx, jy) = E(2, jx, jy) + a_1 * dt * RHS_EB_1_( 5, ix, iy ) + a_2 * dt * RHS_EB_2_( 5, ix, iy );
+    cons_(0, jx, jy) = cons(0, jx, jy) + a_1 * dt * RHS_fluid_1_( 0, ix, iy ) + a_2 * dt * RHS_fluid_2_( 0, ix, iy );
+    cons_(1, jx, jy) = cons(1, jx, jy) + a_1 * dt * RHS_fluid_1_( 1, ix, iy ) + a_2 * dt * RHS_fluid_2_( 1, ix, iy );
+    cons_(2, jx, jy) = cons(2, jx, jy) + a_1 * dt * RHS_fluid_1_( 2, ix, iy ) + a_2 * dt * RHS_fluid_2_( 2, ix, iy );
+    cons_(3, jx, jy) = cons(3, jx, jy) + a_1 * dt * RHS_fluid_1_( 3, ix, iy ) + a_2 * dt * RHS_fluid_2_( 3, ix, iy );
+    cons_(4, jx, jy) = cons(4, jx, jy) + a_1 * dt * RHS_fluid_1_( 4, ix, iy ) + a_2 * dt * RHS_fluid_2_( 4, ix, iy );
 
   }}
 
-  set_ghost_cells(cons_e_);
-  set_ghost_cells(E_);
-  set_ghost_cells(B_);
+  set_ghost_cells(cons_);
 
 }
 
@@ -358,11 +196,11 @@ void simulation::get_primitives( const ArrayND<double>& cons )
     double vz  = cons(3, ix, iy) / rho;
     double p   = ( Gamma - 1. ) * ( cons(4, ix, iy) - 0.5 * rho * ( vx*vx + vy*vy + vz*vz ) );
 
-    prim_e(0, ix, iy) = rho;
-    prim_e(1, ix, iy) = vx;
-    prim_e(2, ix, iy) = vy;
-    prim_e(3, ix, iy) = vz;
-    prim_e(4, ix, iy) = p;
+    prim(0, ix, iy) = rho;
+    prim(1, ix, iy) = vx;
+    prim(2, ix, iy) = vy;
+    prim(3, ix, iy) = vz;
+    prim(4, ix, iy) = p;
 
   }}
 
@@ -511,8 +349,8 @@ void simulation::get_RHS_fluid( ArrayND<double>& RHS, ArrayND<double>& cons )
   get_primitives( cons );
 
   // interpolate
-  reconstruct( prim_e, TVD_fluid_x, prim_ipol_x, cons_ipol_x, flux_ipol_x, speed_ipol_x, 0 );
-  reconstruct( prim_e, TVD_fluid_y, prim_ipol_y, cons_ipol_y, flux_ipol_y, speed_ipol_y, 1 );
+  reconstruct( prim, TVD_fluid_x, prim_ipol_x, cons_ipol_x, flux_ipol_x, speed_ipol_x, 0 );
+  reconstruct( prim, TVD_fluid_y, prim_ipol_y, cons_ipol_y, flux_ipol_y, speed_ipol_y, 1 );
 
   // numerical flux
   get_num_flux( num_flux_fluid_x, flux_ipol_x, cons_ipol_x, speed_ipol_x, 0 );
@@ -539,15 +377,13 @@ void simulation::step()
 
   get_dt();
 
-  get_RHS_fluid( RHS_fluid_0, cons_e );
-  get_RHS_BE   ( RHS_BE_0, E  , B   );
-  RK_step      ( cons_e_1, E_1, B_1, RHS_fluid_0, RHS_fluid_1, RHS_BE_0, RHS_BE_1, 1. , 0.  );
+  get_RHS_fluid( RHS_fluid_0, cons );
+  RK_step      ( cons_1, RHS_fluid_0, RHS_fluid_1, 1. , 0.  );
 
-  get_RHS_fluid( RHS_fluid_1, cons_e_1 );
-  get_RHS_BE   ( RHS_BE_1, E_1, B_1 );
-  RK_step      ( cons_e  , E  , B  , RHS_fluid_0, RHS_fluid_1, RHS_BE_0, RHS_BE_1, 0.5, 0.5 );
+  get_RHS_fluid( RHS_fluid_1, cons_1 );
+  RK_step      ( cons  , RHS_fluid_0, RHS_fluid_1, 0.5, 0.5 );
 
-  get_primitives( cons_e );
+  get_primitives( cons );
 
 }
 
@@ -602,17 +438,15 @@ void simulation::set_ghost_cells( ArrayND<double>& field )
 void simulation::print_vti()
 {
 
-  const std::string file_name = "/home/fs1/mw/Reconnection/mikePhy/output_" + std::to_string(num_outputs) + ".vti";
+  const std::string file_name = "/home/fs1/mw/KH/output_" + std::to_string(num_outputs) + ".vti";
 
   long N_bytes_scalar, N_bytes_vector;
 
   write_vti_header( file_name, N_bytes_scalar, N_bytes_vector );
 
-  print_mpi_vector( file_name, N_bytes_vector, E     , 0 );
-  print_mpi_vector( file_name, N_bytes_vector, B     , 0 );
-  print_mpi_vector( file_name, N_bytes_vector, prim_e, 1 );
-  print_mpi_scalar( file_name, N_bytes_scalar, prim_e, 0 );
-  print_mpi_scalar( file_name, N_bytes_scalar, prim_e, 4 );
+  print_mpi_vector( file_name, N_bytes_vector, prim, 1 );
+  print_mpi_scalar( file_name, N_bytes_scalar, prim, 0 );
+  print_mpi_scalar( file_name, N_bytes_scalar, prim, 4 );
 
   write_vti_footer( file_name );
 
@@ -737,12 +571,6 @@ void simulation::write_vti_header( std::string file_name, long& N_bytes_scalar, 
                                  << "0" << " " << "1" << "\">" << std::endl;
     
     os << "      <CellData>" << std::endl;
-    os << "        <DataArray type=\"Float32\" Name=\"E\" NumberOfComponents=\"3\" format=\"appended\" offset=\"" << offset << "\">" << std::endl;
-    os << "        </DataArray>" << std::endl;
-    offset += bin_size_vector;
-    os << "        <DataArray type=\"Float32\" Name=\"B\" NumberOfComponents=\"3\" format=\"appended\" offset=\"" << offset << "\">" << std::endl;
-    os << "        </DataArray>" << std::endl;
-    offset += bin_size_vector;
     os << "        <DataArray type=\"Float32\" Name=\"V\" NumberOfComponents=\"3\" format=\"appended\" offset=\"" << offset << "\">" << std::endl;
     os << "        </DataArray>" << std::endl;
     offset += bin_size_vector;
