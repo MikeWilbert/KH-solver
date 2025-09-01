@@ -252,24 +252,24 @@ void simulation::reconstruct( const ArrayND<double>& prim     , ArrayND<double>&
     size_t jx = ix+BD-shift[0];
     size_t jy = iy+BD-shift[1];
 
-    double prim_l  = prim( i, jx-  shift[0], jy-  shift[1] ); // q_{j-1}
-    double prim_c  = prim( i, jx           , jy            ); // q_{j  }
-    double prim_r  = prim( i, jx+  shift[0], jy+  shift[1] ); // q_{j+1}
+    double prim_l2 = prim( i, jx-  shift[0], jy-  shift[1] ); // q_{j-1}
+    double prim_l1 = prim( i, jx           , jy            ); // q_{j  }
+    double prim_r1 = prim( i, jx+  shift[0], jy+  shift[1] ); // q_{j+1}
 
     // all ipossible interpolations with order 2
-    double inter_1 = 0.5 * prim_c + 0.5 * prim_r;
-    double inter_2 = 1.5 * prim_c - 0.5 * prim_l;
+    double inter_1 = 1.5 * prim_l1 - 0.5 * prim_l2 ;
+    double inter_2 = 0.5 * prim_l1 + 0.5 * prim_r1 ;
 
     double gamma_1 = 2./3.;
     double gamma_2 = 1./3.;
 
-    double beta_1 = ( prim_r - prim_c ) * ( prim_r - prim_c );
-    double beta_2 = ( prim_c - prim_l ) * ( prim_c - prim_l );
+    double beta_1 = pow( prim_l1 - prim_l2, 2 );
+    double beta_2 = pow( prim_r1 - prim_l1, 2 );
 
     double eps = 1.e-6;
 
-    double alpha_1 = gamma_1 / ( eps + beta_1 ); 
-    double alpha_2 = gamma_2 / ( eps + beta_2 );
+    double alpha_1 = gamma_1 / pow( eps + beta_1, 2 ); 
+    double alpha_2 = gamma_2 / pow( eps + beta_2, 2 );
 
     double alpha_sum_inv = 1. / ( alpha_1 + alpha_2 );
 
@@ -287,27 +287,27 @@ void simulation::reconstruct( const ArrayND<double>& prim     , ArrayND<double>&
   for( size_t iy = 0; iy < end[1]; iy++ ){
 
     // index of the cell center to interplate from
-    size_t jx = ix+BD;
-    size_t jy = iy+BD;
+    size_t jx = ix+BD-shift[0];
+    size_t jy = iy+BD-shift[1];
 
-    double prim_c  = prim( i, jx           , jy            ); // q_{j  }
-    double prim_r  = prim( i, jx+  shift[0], jy+  shift[1] ); // q_{j+1}
-    double prim_r2 = prim( i, jx+  shift[0], jy+2*shift[1] ); // q_{j+2}
+    double prim_l1 = prim( i, jx           , jy            ); // q_{j  }
+    double prim_r1 = prim( i, jx+  shift[0], jy+  shift[1] ); // q_{j+1}
+    double prim_r2 = prim( i, jx+2*shift[0], jy+2*shift[1] ); // q_{j+2}
 
-   // all ipossible interpolations with order 2
-    double inter_1 = 0.5 * prim_c + 0.5 * prim_r ;
-    double inter_2 = 1.5 * prim_c - 0.5 * prim_r2;
+    // all ipossible interpolations with order 2
+    double inter_1 = 1.5 * prim_r1 - 0.5 * prim_r2 ;
+    double inter_2 = 0.5 * prim_r1 + 0.5 * prim_l1 ;
 
-    double gamma_1 = 1./3.;
-    double gamma_2 = 2./3.;
+    double gamma_1 = 2./3.;
+    double gamma_2 = 1./3.;
 
-    double beta_1 = ( prim_r2 - prim_r ) * ( prim_r2 - prim_r );
-    double beta_2 = ( prim_r  - prim_c ) * ( prim_r  - prim_c );
+    double beta_1 = pow( prim_r1 - prim_r2, 2 );
+    double beta_2 = pow( prim_l1 - prim_r1, 2 );
 
     double eps = 1.e-6;
 
-    double alpha_1 = gamma_1 / ( eps + beta_1 ); 
-    double alpha_2 = gamma_2 / ( eps + beta_2 );
+    double alpha_1 = gamma_1 / pow( eps + beta_1, 2 ); 
+    double alpha_2 = gamma_2 / pow( eps + beta_2, 2 );
 
     double alpha_sum_inv = 1. / ( alpha_1 + alpha_2 );
 
@@ -317,6 +317,95 @@ void simulation::reconstruct( const ArrayND<double>& prim     , ArrayND<double>&
     prim_ipol( 1, i, ix, iy ) = omega_1 * inter_1 + omega_2 * inter_2;
 
   }}}
+
+  // // interplation from the LEFT
+  // for( size_t i  = 0; i  < 5   ; i++ ){
+  // for( size_t ix = 0; ix < end[0]; ix++ ){
+  // for( size_t iy = 0; iy < end[1]; iy++ ){
+
+  //   // index of the cell center to interplate from
+  //   size_t jx = ix+BD-shift[0];
+  //   size_t jy = iy+BD-shift[1];
+
+  //   double prim_l2 = prim( i, jx-2*shift[0], jy-2*shift[1] ); // q_{j-2}
+  //   double prim_l  = prim( i, jx-  shift[0], jy-  shift[1] ); // q_{j-1}
+  //   double prim_c  = prim( i, jx           , jy            ); // q_{j  }
+  //   double prim_r  = prim( i, jx+  shift[0], jy+  shift[1] ); // q_{j+1}
+  //   double prim_r2 = prim( i, jx+2*shift[0], jy+2*shift[1] ); // q_{j+2}
+
+  //   // all ipossible interpolations with order 3
+  //   double inter_1 =  1./3.*prim_l2 - 7./6.*prim_l + 11./6.*prim_c ;
+  //   double inter_2 = -1./6.*prim_l  + 5./6.*prim_c +  1./3.*prim_r ;
+  //   double inter_3 =  1./3.*prim_c  + 5./6.*prim_r -  1./6.*prim_r2;
+
+  //   double gamma_1 = 0.1;
+  //   double gamma_2 = 0.6;
+  //   double gamma_3 = 0.3;
+
+  //   double beta_1 = 13./12. * pow( prim_c  - 2*prim_l + prim_l2, 2 ) + 1./4. * pow(   prim_c  - 4*prim_l + 3*prim_l2, 2);
+  //   double beta_2 = 13./12. * pow( prim_r  - 2*prim_c + prim_l , 2 ) + 1./4. * pow(   prim_l  -   prim_r            , 2);
+  //   double beta_3 = 13./12. * pow( prim_r2 - 2*prim_r + prim_c , 2 ) + 1./4. * pow( 3*prim_r2 - 4*prim_r +   prim_c , 2);
+
+  //   double eps = 1.e-6;
+
+  //   double alpha_1 = gamma_1 / pow( eps + beta_1, 2 ); 
+  //   double alpha_2 = gamma_2 / pow( eps + beta_2, 2 );
+  //   double alpha_3 = gamma_3 / pow( eps + beta_3, 2 );
+
+  //   double alpha_sum_inv = 1. / ( alpha_1 + alpha_2 + alpha_3 );
+
+  //   double omega_1 = alpha_1 * alpha_sum_inv;
+  //   double omega_2 = alpha_2 * alpha_sum_inv;
+  //   double omega_3 = alpha_3 * alpha_sum_inv;
+
+  //   prim_ipol( 0, i, ix, iy ) = omega_1 * inter_1 + omega_2 * inter_2 + omega_3 * inter_3;
+
+  // }}}
+
+
+  // // interplation from the RIGHT
+  // for( size_t i  = 0; i  < 5   ; i++ ){
+  // for( size_t ix = 0; ix < end[0]; ix++ ){
+  // for( size_t iy = 0; iy < end[1]; iy++ ){
+
+  //   // index of the cell center to interplate from
+  //   size_t jx = ix+BD;
+  //   size_t jy = iy+BD;
+
+  //   double prim_l  = prim( i, jx-  shift[0], jy-  shift[1] ); // q_{j-1}
+  //   double prim_c  = prim( i, jx           , jy            ); // q_{j  }
+  //   double prim_r  = prim( i, jx+  shift[0], jy+  shift[1] ); // q_{j+1}
+  //   double prim_r2 = prim( i, jx+2*shift[0], jy+2*shift[1] ); // q_{j+2}
+  //   double prim_r3 = prim( i, jx+3*shift[0], jy+3*shift[1] ); // q_{j+3}
+
+  //   // all ipossible interpolations with order 3
+  //   double inter_3 =  1./3.*prim_r3 - 7./6.*prim_r2 + 11./6.*prim_r ;
+  //   double inter_2 = -1./6.*prim_r2  + 5./6.*prim_r +  1./3.*prim_c ;
+  //   double inter_1 =  1./3.*prim_r  + 5./6.*prim_c -  1./6.*prim_l;
+
+  //   double gamma_1 = 0.1;
+  //   double gamma_2 = 0.6;
+  //   double gamma_3 = 0.3;
+
+  //   double beta_1 = 13./12. * pow( prim_r - 2*prim_r2 + prim_r3, 2 ) + 1./4. * pow(   prim_r  - 4*prim_r2 + 3*prim_r3, 2);
+  //   double beta_2 = 13./12. * pow( prim_c - 2*prim_r  + prim_r2, 2 ) + 1./4. * pow(   prim_r2 -   prim_c             , 2);
+  //   double beta_3 = 13./12. * pow( prim_l - 2*prim_c  + prim_r , 2 ) + 1./4. * pow( 3*prim_l  - 4*prim_c  +   prim_r , 2);
+
+  //   double eps = 1.e-6;
+
+  //   double alpha_1 = gamma_1 / pow( eps + beta_1, 2 ); 
+  //   double alpha_2 = gamma_2 / pow( eps + beta_2, 2 );
+  //   double alpha_3 = gamma_3 / pow( eps + beta_3, 2 );
+
+  //   double alpha_sum_inv = 1. / ( alpha_1 + alpha_2 + alpha_3 );
+
+  //   double omega_1 = alpha_1 * alpha_sum_inv;
+  //   double omega_2 = alpha_2 * alpha_sum_inv;
+  //   double omega_3 = alpha_3 * alpha_sum_inv;
+
+  //   prim_ipol( 1, i, ix, iy ) = omega_1 * inter_1 + omega_2 * inter_2 + omega_3 * inter_3;
+
+  // }}}
 
 
 
