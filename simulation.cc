@@ -241,41 +241,57 @@ void simulation::reconstruct( const ArrayND<double>& prim     , ArrayND<double>&
 
   int    shift[2] = { 1-dir, 0+dir }; // dir:0 -> (1, 0) , dir:1 -> ( 0, 1)
 
-  double theta = 1.5;
-
-  // get TVD derivatives
-  for( size_t i  = 0; i  < 5   ; i++ ){
-  for( size_t ix = 0; ix < N[0] + 2*shift[0]; ix++ ){
-  for( size_t iy = 0; iy < N[1] + 2*shift[1]; iy++ ){
-
-    size_t jx = ix + BD - shift[0];
-    size_t jy = iy + BD - shift[1];
-
-    double prim_l = prim( i, jx-shift[0], jy-shift[1] );
-    double prim_c = prim( i, jx         , jy          );
-    double prim_r = prim( i, jx+shift[0], jy+shift[1] );
-
-    double dif_l = 0.5  * ( prim_c - prim_l );
-    double dif_c = 0.25 * ( prim_r - prim_l );
-    double dif_r = 0.5  * ( prim_r - prim_c );
-
-    // TVD_fluid( i, ix, iy ) = minmod( dif_l, dif_r ); // minmod
-    TVD_fluid( i, ix, iy ) = minmod( theta*dif_l, dif_c, theta*dif_r ); // MC
-
-  }}}
-
   // interpolate
+
+  // interplation from the LEFT
   for( size_t i  = 0; i  < 5   ; i++ ){
   for( size_t ix = 0; ix < end[0]; ix++ ){
   for( size_t iy = 0; iy < end[1]; iy++ ){
 
+    // index of the cell center to interplate from
+    size_t jx = ix+BD-shift[0];
+    size_t jy = iy+BD-shift[1];
+
+    double prim_l  = prim( i, jx-  shift[0], jy-  shift[1] ); // q_{j-1}
+    double prim_c  = prim( i, jx           , jy            ); // q_{j  }
+    double prim_r  = prim( i, jx+  shift[0], jy+  shift[1] ); // q_{j+1}
+
+    // difference stencils
+    double dif_1 = (prim_c - prim_l);
+    double dif_2 = (prim_r - prim_c);
+
+    // all ipossible interpolations with order 2
+    double inter_1 = prim_c + 0.5 * dif_1;
+    double inter_2 = prim_c + 0.5 * dif_2;
+
+    prim_ipol( 0, i, ix, iy ) = prim_c + 0.5 * minmod( dif_1, dif_2 );
+
+  }}}
+
+
+  // interplation from the RIGHT
+  for( size_t i  = 0; i  < 5   ; i++ ){
+  for( size_t ix = 0; ix < end[0]; ix++ ){
+  for( size_t iy = 0; iy < end[1]; iy++ ){
+
+    // index of the cell center to interplate from
     size_t jx = ix+BD;
     size_t jy = iy+BD;
 
-    prim_ipol( 0, i, ix, iy ) = prim( i, jx-shift[0], jy-shift[1] ) + 0.5 * TVD_fluid( i, ix         , iy          );
-    prim_ipol( 1, i, ix, iy ) = prim( i, jx         , jy          ) - 0.5 * TVD_fluid( i, ix+shift[0], iy+shift[1] );
+    double prim_l  = prim( i, jx-  shift[0], jy-  shift[1] ); // q_{j-1}
+    double prim_c  = prim( i, jx           , jy            ); // q_{j  }
+    double prim_r  = prim( i, jx+  shift[0], jy+  shift[1] ); // q_{j+1}
+
+    // difference stencils
+    double dif_1 = (prim_c - prim_l);
+    double dif_2 = (prim_r - prim_c);
+
+    prim_ipol( 1, i, ix, iy ) = prim_c - 0.5 * minmod( dif_1, dif_2 );
 
   }}}
+
+
+
 
   // physical flux and max absolute speeds
   for( size_t is = 0; is < 2     ; is++ ){
