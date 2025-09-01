@@ -256,15 +256,27 @@ void simulation::reconstruct( const ArrayND<double>& prim     , ArrayND<double>&
     double prim_c  = prim( i, jx           , jy            ); // q_{j  }
     double prim_r  = prim( i, jx+  shift[0], jy+  shift[1] ); // q_{j+1}
 
-    // difference stencils
-    double dif_1 = (prim_c - prim_l);
-    double dif_2 = (prim_r - prim_c);
-
     // all ipossible interpolations with order 2
-    double inter_1 = prim_c + 0.5 * dif_1;
-    double inter_2 = prim_c + 0.5 * dif_2;
+    double inter_1 = 0.5 * prim_c + 0.5 * prim_r;
+    double inter_2 = 1.5 * prim_c - 0.5 * prim_l;
 
-    prim_ipol( 0, i, ix, iy ) = prim_c + 0.5 * minmod( dif_1, dif_2 );
+    double gamma_1 = 2./3.;
+    double gamma_2 = 1./3.;
+
+    double beta_1 = ( prim_r - prim_c ) * ( prim_r - prim_c );
+    double beta_2 = ( prim_c - prim_l ) * ( prim_c - prim_l );
+
+    double eps = 1.e-6;
+
+    double alpha_1 = gamma_1 / ( eps + beta_1 ); 
+    double alpha_2 = gamma_2 / ( eps + beta_2 );
+
+    double alpha_sum_inv = 1. / ( alpha_1 + alpha_2 );
+
+    double omega_1 = alpha_1 * alpha_sum_inv;
+    double omega_2 = alpha_2 * alpha_sum_inv;
+
+    prim_ipol( 0, i, ix, iy ) = omega_1 * inter_1 + omega_2 * inter_2;
 
   }}}
 
@@ -278,15 +290,31 @@ void simulation::reconstruct( const ArrayND<double>& prim     , ArrayND<double>&
     size_t jx = ix+BD;
     size_t jy = iy+BD;
 
-    double prim_l  = prim( i, jx-  shift[0], jy-  shift[1] ); // q_{j-1}
     double prim_c  = prim( i, jx           , jy            ); // q_{j  }
     double prim_r  = prim( i, jx+  shift[0], jy+  shift[1] ); // q_{j+1}
+    double prim_r2 = prim( i, jx+  shift[0], jy+2*shift[1] ); // q_{j+2}
 
-    // difference stencils
-    double dif_1 = (prim_c - prim_l);
-    double dif_2 = (prim_r - prim_c);
+   // all ipossible interpolations with order 2
+    double inter_1 = 0.5 * prim_c + 0.5 * prim_r ;
+    double inter_2 = 1.5 * prim_c - 0.5 * prim_r2;
 
-    prim_ipol( 1, i, ix, iy ) = prim_c - 0.5 * minmod( dif_1, dif_2 );
+    double gamma_1 = 1./3.;
+    double gamma_2 = 2./3.;
+
+    double beta_1 = ( prim_r2 - prim_r ) * ( prim_r2 - prim_r );
+    double beta_2 = ( prim_r  - prim_c ) * ( prim_r  - prim_c );
+
+    double eps = 1.e-6;
+
+    double alpha_1 = gamma_1 / ( eps + beta_1 ); 
+    double alpha_2 = gamma_2 / ( eps + beta_2 );
+
+    double alpha_sum_inv = 1. / ( alpha_1 + alpha_2 );
+
+    double omega_1 = alpha_1 * alpha_sum_inv;
+    double omega_2 = alpha_2 * alpha_sum_inv;
+
+    prim_ipol( 1, i, ix, iy ) = omega_1 * inter_1 + omega_2 * inter_2;
 
   }}}
 
