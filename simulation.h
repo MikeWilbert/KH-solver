@@ -93,6 +93,7 @@ class simulation
     template <typename T> constexpr int sgn(T val);
     double minmod( const double a, const double b );
     double minmod( const double a, const double b, const double c );
+    inline double sqr(double x);
 
     void print_vti();
     void write_vti_header( std::string file_name, long& N_bytes_scalar, long& N_bytes_vector );
