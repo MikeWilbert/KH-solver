@@ -4,14 +4,9 @@
 int main(int argc, char** argv) {
     MPI_Init(&argc, &argv);
 
-    const size_t N        = 256;     // spatial resolution
-    const size_t BD       = 3;       // # ghost cells per side
-    const double cfl      = 0.5;    // CFL number
-    const double run_time = 3.; // run time
+    int N = 100;
 
-    simulation simu( N, BD, cfl );
-
-    simu.run( run_time );
+    simulation simu( N );
 
     MPI_Finalize();
     return 0;
