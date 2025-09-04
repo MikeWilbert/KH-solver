@@ -7,15 +7,98 @@ class simulation
 
   public:
 
-    simulation( const int N_  );
+    simulation( const size_t N_, const size_t BD_, const double cfl_ );
+    void run( const double run_time );
     ~simulation();
 
   private:
 
-    int mpi_rank, mpi_size;
+    MPI_Comm cart_comm;
+    int mpi_rank, mpi_size, mpi_dims[2], mpi_coords[2];
+    int mpi_neighbors[8]; // W,E,S,N, NW, NE, SW, SE
+    MPI_Datatype vti_subarray_scalar = MPI_DATATYPE_NULL;
+    MPI_Datatype vti_subarray_vector = MPI_DATATYPE_NULL;
+    MPI_Datatype vti_float3          = MPI_DATATYPE_NULL;
+    float* float_array_vector;
 
-    const int N;
-    std::vector<double> E;
-    std::vector<double> B;
+    MPI_Datatype mpi_slice_inner_W = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_slice_inner_E = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_slice_inner_S = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_slice_inner_N = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_slice_outer_W = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_slice_outer_E = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_slice_outer_S = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_slice_outer_N = MPI_DATATYPE_NULL;
+
+    MPI_Datatype mpi_edge_inner_SW = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_edge_inner_SE = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_edge_inner_NW = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_edge_inner_NE = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_edge_outer_SW = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_edge_outer_SE = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_edge_outer_NW = MPI_DATATYPE_NULL;
+    MPI_Datatype mpi_edge_outer_NE = MPI_DATATYPE_NULL;
+
+    const size_t N_tot;
+    const size_t BD;
+    const double cfl;
+
+    size_t N[2]; // local internal size (1D)
+    size_t N_bd[2];
+
+    double dt;
+    double dx;
+    double L;
+    double time;
+
+    double dx_inv;
+
+    size_t num_outputs;
+
+    ArrayND<double> prim;
+    ArrayND<double> cons;
+
+    ArrayND<double> prim_1;
+    ArrayND<double> cons_1;
+    ArrayND<double> RHS_fluid_0;
+    ArrayND<double> RHS_fluid_1;
+
+    ArrayND<double> prim_ipol_x;
+    ArrayND<double> prim_ipol_y;
+    ArrayND<double> cons_ipol_x;
+    ArrayND<double> cons_ipol_y;
+    ArrayND<double> flux_ipol_x;
+    ArrayND<double> flux_ipol_y;
+    ArrayND<double> speed_ipol_x;
+    ArrayND<double> speed_ipol_y;
+    ArrayND<double> num_flux_fluid_x;
+    ArrayND<double> num_flux_fluid_y;
+    ArrayND<double> TVD_fluid_x;
+    ArrayND<double> TVD_fluid_y;
+
+    void init_mpi();
+    void setup();
+    void set_ghost_cells( ArrayND<double>& field );
+    void step();
+    void get_dt();
+    void get_primitives( const ArrayND<double>& cons );
+    void reconstruct( const ArrayND<double>& prim, ArrayND<double>& TVD_fluid, ArrayND<double>& prim_ipol, ArrayND<double>& cons_ipol, ArrayND<double>& flux_ipol, ArrayND<double>& speed_ipol, int dir );
+    void get_num_flux( ArrayND<double>& num_flux_fluid, const ArrayND<double>& flux_ipol, 
+                      const ArrayND<double>& cons_ipol, const ArrayND<double>& speed_ipol, int dir );
+    void get_RHS_fluid( ArrayND<double>& RHS, ArrayND<double>& cons );
+    void RK_step( ArrayND<double>& cons_e_,
+                          const ArrayND<double>& RHS_fluid_e_1_, const ArrayND<double>& RHS_fluid_e_2_, 
+                          const double a_1, const double a_2 );
+
+    template <typename T> constexpr int sgn(T val);
+    double minmod( const double a, const double b );
+    double minmod( const double a, const double b, const double c );
+    inline double sqr(double x);
+
+    void print_vti();
+    void write_vti_header( std::string file_name, long& N_bytes_scalar, long& N_bytes_vector );
+    void write_vti_footer( std::string file_name );
+    void print_mpi_vector( std::string file_name, long& N_bytes_vector, const ArrayND<double>& field, const size_t comp );
+    void print_mpi_scalar( std::string file_name, long& N_bytes_scalar, const ArrayND<double>& field, const size_t comp );
 
 };

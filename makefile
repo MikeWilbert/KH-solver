@@ -14,7 +14,7 @@ $(TARGET): main.o simulation.o
 main.o: main.cc include.h
 	$(CXX) $(CXXFLAGS) -c $<
 
-simulation.o: simulation.cc simulation.h include.h
+simulation.o: simulation.cc simulation.h array_ND.h include.h
 	$(CXX) $(CXXFLAGS) -c $<
 
 clean:
